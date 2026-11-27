@@ -1,0 +1,29 @@
+name: Build Orbit 3D (Windows VST3)
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Collect VST3
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item -Recurse "build/Orbit3D_artefacts/Release/VST3/Orbit 3D.vst3" "dist/Orbit 3D.vst3"
+          Get-ChildItem -Recurse dist | Select-Object -First 20 FullName
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Orbit-3D-VST3
+          path: dist/
