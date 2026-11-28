@@ -91,9 +91,13 @@ void Orbit3DProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     sampleRateAtomic = (float) sampleRate;
     srcL.prepare (sampleRate);
     srcR.prepare (sampleRate);
+    srcM.prepare (sampleRate);
+    pdBuf.assign (32768, 0.0f);
+    pdPos = 0; pdCur = 200.0f; hpState = 0.0f;
+    wet.setSize (2, juce::jmax (samplesPerBlock, 64));
     reverb.setSampleRate (sampleRate);
     reverb.reset();
-    work.setSize (2, juce::jmax (samplesPerBlock, 64));
+    work.setSize (3, juce::jmax (samplesPerBlock, 64));
     gainSmooth.reset (sampleRate, 0.03);
     gainSmooth.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (apvts.getRawParameterValue ("trim")->load()));
 }
@@ -185,9 +189,25 @@ void Orbit3DProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         st.backCue = P ("backCue");   st.heightCue = P ("heightCue");
 
         if (work.getNumSamples() < n)
-            work.setSize (2, n, false, false, true);
-        work.copyFrom (0, 0, L, n);
-        work.copyFrom (1, 0, R, n);
+            work.setSize (3, n, false, false, true);
+        if (wet.getNumSamples() < n)
+            wet.setSize (2, n, false, false, true);
+
+        // Mid goes to ONE point (so centred / mono material stays phase-coherent and keeps its top end);
+        // only the side signal is spread to the two virtual speakers around it.
+        const float k = juce::jmin (1.0f, width * 2.0f);
+        {
+            float* m = work.getWritePointer (0);
+            float* sd = work.getWritePointer (1);
+            float* sr2 = work.getWritePointer (2);
+            for (int i = 0; i < n; ++i)
+            {
+                const float mid = 0.5f * (L[i] + R[i]), side = 0.5f * (L[i] - R[i]) * k;
+                m[i] = mid; sd[i] = side; sr2[i] = -side;
+            }
+            // diffuse reverb feed = the mono sum (not shaped by head shadow)
+            juce::FloatVectorOperations::copy (wet.getWritePointer (0), m, n);
+        }
         juce::FloatVectorOperations::clear (L, n);
         juce::FloatVectorOperations::clear (R, n);
 
@@ -214,21 +234,47 @@ void Orbit3DProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
                 }
                 eff = applyMotion (base, motionMode, (float) motionPhase, motionDepth, reverse);
             }
-            srcL.process (work.getReadPointer (0) + start, L + start, R + start, len, eff.x - spread, eff.y, eff.z, st);
-            srcR.process (work.getReadPointer (1) + start, L + start, R + start, len, eff.x + spread, eff.y, eff.z, st);
+            srcM.process (work.getReadPointer (0) + start, L + start, R + start, len, eff.x, eff.y, eff.z, st);
+            if (k > 0.001f)
+            {
+                srcL.process (work.getReadPointer (1) + start, L + start, R + start, len, eff.x - spread, eff.y, eff.z, st);
+                srcR.process (work.getReadPointer (2) + start, L + start, R + start, len, eff.x + spread, eff.y, eff.z, st);
+            }
         }
 
         if (room > 0.001f)
         {
+            // Atmosphere: the farther the source, the later and the larger its reverb is relative to the direct sound.
             const float d = std::sqrt (eff.x * eff.x + eff.y * eff.y + eff.z * eff.z);
-            const float distFactor = juce::jlimit (0.15f, 1.0f, d / 6.0f);
+            const float distMix = juce::jlimit (0.0f, 1.0f, d / 8.0f);
+            const float mix = 0.30f + 0.70f * distMix;
+            const float preTarget = (float) sr * (0.004f + 0.0022f * juce::jmin (d, 12.0f));   // 4..30 ms
+            float* w0 = wet.getWritePointer (0);
+            float* w1 = wet.getWritePointer (1);
+            const int pm = (int) pdBuf.size() - 1;
+            const float hpA = 1.0f - std::exp (-2.0f * 3.14159265f * 160.0f / (float) sr);
+            for (int i = 0; i < n; ++i)
+            {
+                pdBuf[(size_t) (pdPos & pm)] = w0[i];
+                pdCur += (preTarget - pdCur) * 0.0008f;
+                const float rp0 = (float) pdPos - pdCur;
+                const int i0 = (int) std::floor (rp0);
+                const float fr = rp0 - (float) i0;
+                float x = pdBuf[(size_t) (i0 & pm)] * (1.0f - fr) + pdBuf[(size_t) ((i0 + 1) & pm)] * fr;
+                hpState += hpA * (x - hpState);
+                x -= hpState;
+                w0[i] = w1[i] = x;
+                ++pdPos;
+            }
             juce::Reverb::Parameters rp;
             rp.roomSize = 0.3f + 0.65f * P ("roomSize");
             rp.damping = P ("damp"); rp.width = 1.0f; rp.freezeMode = 0.0f;
-            rp.dryLevel = 0.5f;                       // reverb internally doubles dry => unity
-            rp.wetLevel = room * distFactor * 0.14f;  // reverb internally triples wet
+            rp.dryLevel = 0.0f;
+            rp.wetLevel = room * mix * 0.30f;
             reverb.setParameters (rp);
-            reverb.processStereo (L, R, n);
+            reverb.processStereo (w0, w1, n);
+            juce::FloatVectorOperations::add (L, w0, n);
+            juce::FloatVectorOperations::add (R, w1, n);
         }
 
         gainSmooth.setTargetValue (juce::Decibels::decibelsToGain (trimDb));

@@ -871,6 +871,30 @@ SoundPage::SoundPage (Orbit3DProcessor& p)
         addAndMakeVisible (*k);
     addAndMakeVisible (activeToggle);
     activeAttach = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, "active", activeToggle);
+
+    // Atmosphere presets: distance, air, room, size, damping
+    struct Atm { const char* name; float v[5]; };
+    static const Atm list[] = { { "Dry",    { 0.50f, 0.20f, 0.00f, 0.40f, 0.50f } },
+                                { "Close",  { 0.60f, 0.30f, 0.12f, 0.35f, 0.60f } },
+                                { "Studio", { 0.60f, 0.50f, 0.28f, 0.50f, 0.55f } },
+                                { "Hall",   { 0.70f, 0.60f, 0.50f, 0.80f, 0.40f } },
+                                { "Cave",   { 0.80f, 0.70f, 0.80f, 0.95f, 0.25f } } };
+    for (auto& a : list)
+    {
+        auto* b = atmos.add (new TextButton (a.name));
+        b->onClick = [this, a]
+        {
+            const char* ids[5] { "distance", "air", "room", "roomSize", "damp" };
+            for (int i = 0; i < 5; ++i)
+                if (auto* prm = proc.apvts.getParameter (ids[i]))
+                {
+                    prm->beginChangeGesture();
+                    prm->setValueNotifyingHost (prm->convertTo0to1 (a.v[i]));
+                    prm->endChangeGesture();
+                }
+        };
+        addAndMakeVisible (b);
+    }
     startTimerHz (30);
 }
 
@@ -886,6 +910,13 @@ void SoundPage::resized()
         k2.setBounds (row.removeFromLeft (kw));
         k3.setBounds (row);
     };
+    sections.push_back ({ "ATMOSPHERE", a.removeFromTop (18) });
+    {
+        auto row = a.removeFromTop (28);
+        const int gap = 4, w = (row.getWidth() - gap * ((int) atmos.size() - 1)) / (int) atmos.size();
+        for (auto* b : atmos) { b->setBounds (row.removeFromLeft (w)); row.removeFromLeft (gap); }
+    }
+    a.removeFromTop (6);
     sections.push_back ({ "SPACE", a.removeFromTop (18) });
     row3 (kWidth, kDist, kAir);
     sections.push_back ({ "ROOM REVERB", a.removeFromTop (18) });
@@ -930,6 +961,64 @@ void SoundPage::paint (Graphics& g)
         g.drawText (values[i], c.toNearestInt(), Justification::centredLeft);
     }
     in.removeFromTop (6.0f);
+
+    if (ui::design == ui::Vintage)
+    {
+        // analogue VU meters with ballistic needles
+        auto vuArea = in.withTrimmedBottom (30.0f);
+        auto corrArea = in.withTrimmedTop (vuArea.getHeight() + 4.0f);
+        const float tL = jlimit (-20.0f, 3.0f, toDb (proc.ownLevelL.load()) + 18.0f);
+        const float tR = jlimit (-20.0f, 3.0f, toDb (proc.ownLevelR.load()) + 18.0f);
+        vuL += (tL - vuL) * 0.22f;
+        vuR += (tR - vuR) * 0.22f;
+        auto meter = [&] (Rectangle<float> m, float v, const char* tag)
+        {
+            g.setGradientFill (ColourGradient (Colour (0xfff3e7c4), m.getX(), m.getY(), Colour (0xffd9c78f), m.getRight(), m.getBottom(), false));
+            g.fillRoundedRectangle (m, 3.0f);
+            g.setColour (Colour (0xffb8a46a)); g.drawRoundedRectangle (m.reduced (0.5f), 3.0f, 1.5f);
+            const Point<float> piv (m.getCentreX(), m.getBottom() + m.getHeight() * 0.55f);
+            const float R = m.getHeight() * 1.25f;
+            auto ang = [] (float db) { return degreesToRadians (-48.0f + (db + 20.0f) / 23.0f * 96.0f); };
+            Graphics::ScopedSaveState ss2 (g);
+            g.reduceClipRegion (m.reduced (1.0f).toNearestInt());
+            Path arc; arc.addCentredArc (piv.x, piv.y, R, R, 0.0f, ang (-20.0f), ang (0.0f), true);
+            g.setColour (Colour (0xff2a1f0a)); g.strokePath (arc, PathStrokeType (1.2f));
+            Path red; red.addCentredArc (piv.x, piv.y, R, R, 0.0f, ang (0.0f), ang (3.0f), true);
+            g.setColour (Colour (0xffb5532a)); g.strokePath (red, PathStrokeType (3.5f));
+            for (int db = -20; db <= 3; ++db)
+            {
+                const bool major = db == -20 || db == -10 || db == -5 || db == 0 || db == 3;
+                const float a = ang ((float) db);
+                const Point<float> p0 (piv.x + std::sin (a) * R, piv.y - std::cos (a) * R);
+                const Point<float> p1 (piv.x + std::sin (a) * (R - (major ? 6.0f : 3.0f)), piv.y - std::cos (a) * (R - (major ? 6.0f : 3.0f)));
+                g.setColour (db > 0 ? Colour (0xffb5532a) : Colour (0xff2a1f0a));
+                g.drawLine (Line<float> (p0, p1), major ? 1.3f : 0.8f);
+            }
+            g.setColour (Colour (0xff2a1f0a));
+            g.setFont (Font (FontOptions (String ("Georgia"), 9.0f, Font::italic)));
+            g.drawText ("VU", Rectangle<float> (m.getCentreX() - 15.0f, m.getY() + m.getHeight() * 0.28f, 30.0f, 12.0f).toNearestInt(), Justification::centred);
+            g.setFont (Font (FontOptions (String ("Georgia"), 9.0f, Font::bold)));
+            g.drawText (tag, Rectangle<float> (m.getX() + 5.0f, m.getBottom() - 15.0f, 16.0f, 12.0f).toNearestInt(), Justification::centred);
+            const float a = ang (v);
+            g.setColour (Colour (0xff3a0f08));
+            g.drawLine (piv.x, piv.y, piv.x + std::sin (a) * (R - 3.0f), piv.y - std::cos (a) * (R - 3.0f), 1.5f);
+        };
+        auto lm = vuArea.removeFromLeft ((vuArea.getWidth() - 8.0f) * 0.5f);
+        vuArea.removeFromLeft (8.0f);
+        meter (lm, vuL, "L");
+        meter (vuArea, vuR, "R");
+
+        const float corr = proc.ownCorr.load();
+        corrArea.removeFromTop (2.0f);
+        g.setColour (cardDim()); g.setFont (ui::font (9.0f, true));
+        g.drawText ("PHASE", corrArea.removeFromLeft (34.0f).toNearestInt(), Justification::centredLeft);
+        auto cb = corrArea.withSizeKeepingCentre (corrArea.getWidth(), 7.0f);
+        g.setColour (cardBar()); g.fillRoundedRectangle (cb, 2.0f);
+        g.setColour (Colour (0xff6b5a3a)); g.drawVerticalLine ((int) cb.getCentreX(), cb.getY() - 2.0f, cb.getBottom() + 2.0f);
+        const float mx = cb.getX() + (corr + 1.0f) * 0.5f * cb.getWidth();
+        g.setColour (Colour (0xffffb347)); g.fillEllipse (mx - 4.0f, cb.getCentreY() - 4.0f, 8.0f, 8.0f);
+        return;
+    }
 
     auto bar = [&] (Rectangle<float> b, float lin, const String& name)
     {

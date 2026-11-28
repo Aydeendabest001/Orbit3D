@@ -201,9 +201,11 @@ private:
     void timerCallback() override { repaint (readoutRect); }
     Orbit3DProcessor& proc;
     Knob kWidth, kDist, kAir, kRoom, kSize, kDamp, kBack, kHeight, kTrim;
+    juce::OwnedArray<juce::TextButton> atmos;
     juce::ToggleButton activeToggle { "3D processing" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> activeAttach;
     juce::Rectangle<int> readoutRect;
+    float vuL = -20.0f, vuR = -20.0f;
     std::vector<std::pair<juce::String, juce::Rectangle<int>>> sections;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SoundPage)

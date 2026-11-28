@@ -31,3 +31,10 @@ Six **designs** (LOOK > DESIGN). Each one changes the whole interface (knobs, bu
 Also: 8 orb styles (Glow, Sphere, Ring, Pulse, Lamp, Target, Flat, Blip), orb colour mode, floors, listener style, perspective, glow, trail and label size, spectrum style and more. Settings file: `%APPDATA%\Orbit3D\look.xml`.
 
 Use headphones. The master view sees plugins running in the same Reaper process (the default).
+
+## v4 notes
+* **Top end fixed.** Earlier versions low-passed even a centred source (~5 kHz), used a low-pass interpolator in the delay lines and always applied a pinna notch. All three are gone: at factory settings a centred source is flat to 16 kHz (+2 dB presence at 3-4 kHz). Rear / far / side positions still darken the sound on purpose.
+* **Mid/side rendering.** The mono (centre) content is placed at ONE point, only the side content is spread by Width, so mono material no longer comb-filters.
+* **Atmosphere.** Room reverb now has distance-based pre-delay (4-30 ms), a high-passed diffuse tail, and a wet level that grows with distance. SOUND tab > ATMOSPHERE has one-click presets (Dry, Close, Studio, Hall, Cave). Tip: put distant instruments (pads, backing vocals) farther away and raise Room; keep lead instruments close for clarity.
+* Default level is unity at the default 2.5 m position; closer = louder, farther = quieter (Distance knob).
+* Vintage is now the default design, with analogue VU meters on the SOUND tab. An old look.xml is ignored once.

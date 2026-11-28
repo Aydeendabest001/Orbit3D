@@ -145,11 +145,19 @@ private:
 
     float readFrac (float delaySamples) const
     {
+        // 4-point Hermite: keeps the top octave intact (linear interpolation is a low-pass)
         const float pos = (float) wp - delaySamples;
         const int   i0  = (int) std::floor (pos);
         const float f   = pos - (float) i0;
-        return buffer[(size_t) (i0 & mask)] * (1.0f - f)
-             + buffer[(size_t) ((i0 + 1) & mask)] * f;
+        const float ym1 = buffer[(size_t) ((i0 - 1) & mask)];
+        const float y0  = buffer[(size_t) (i0 & mask)];
+        const float y1  = buffer[(size_t) ((i0 + 1) & mask)];
+        const float y2  = buffer[(size_t) ((i0 + 2) & mask)];
+        const float c0 = y0;
+        const float c1 = 0.5f * (y1 - ym1);
+        const float c2 = ym1 - 2.5f * y0 + 2.0f * y1 - 0.5f * y2;
+        const float c3 = 0.5f * (y2 - ym1) + 1.5f * (y0 - y1);
+        return ((c3 * f + c2) * f + c1) * f + c0;
     }
 
     Params compute (float x, float y, float z, const SpatialSettings& st) const
@@ -169,29 +177,29 @@ private:
         p.dL = 2.0f + std::max (0.0f, itd);
         p.dR = 2.0f + std::max (0.0f, -itd);
 
-        // head shadow on the far ear
-        const float shadowR = (1.0f - lat) * 0.5f;
-        const float shadowL = (1.0f + lat) * 0.5f;
+        // head shadow: only the far ear is shadowed; a centred source leaves both ears open
+        const float shadowR = std::max (0.0f, -lat);
+        const float shadowL = std::max (0.0f, lat);
 
         const float rearFactor = std::pow (0.30f, rear * st.backCue);
         const float air = 1.0f / (1.0f + 0.20f * std::max (0.0f, dc - 1.0f) * st.air);
 
         auto cutoff = [&] (float shadow)
         {
-            const float fc = 18000.0f * std::pow (1500.0f / 18000.0f, shadow) * rearFactor * air;
-            return juce::jlimit (700.0f, 0.45f * sr, fc);
+            const float fc = 40000.0f * std::pow (2600.0f / 40000.0f, shadow) * rearFactor * air;
+            return juce::jlimit (700.0f, 3.0f * sr, fc);   // far above Nyquist = transparent
         };
         p.fcL = cutoff (shadowL);
         p.fcR = cutoff (shadowR);
 
-        const float dist = std::pow (1.0f / std::max (dc, 1.0f), st.distance);
-        p.gL = std::min (1.25f, dist * (1.0f - 0.40f * shadowL) / 0.8f);
-        p.gR = std::min (1.25f, dist * (1.0f - 0.40f * shadowR) / 0.8f);
+        const float dist = std::min (1.6f, std::pow (2.5f / std::max (dc, 1.0f), st.distance));   // unity at the default 2.5 m
+        p.gL = std::min (1.6f, dist * (1.0f - 0.45f * shadowL));
+        p.gR = std::min (1.6f, dist * (1.0f - 0.45f * shadowR));
 
         // pinna / elevation
         p.peakDb  = 6.5f * sinEl * st.heightCue;
         p.notchHz = 6000.0f + 4200.0f * (sinEl + 1.0f) * 0.5f;
-        p.notchDb = -8.0f * st.heightCue * (1.0f - 0.5f * std::abs (lat));
+        p.notchDb = -7.0f * st.heightCue * std::abs (sinEl) * (1.0f - 0.5f * std::abs (lat));
 
         // front/back presence: +3 dB in front, -3 dB behind
         p.presDb = 3.0f * front * st.backCue;

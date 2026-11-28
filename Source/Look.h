@@ -134,12 +134,12 @@ inline void applyDesign (int i)
 //==============================================================================
 struct LookSettings
 {
-    int   design = 0;
-    int   orbStyle = 0;       // 0 Glow, 1 Sphere, 2 Ring, 3 Pulse, 4 Lamp, 5 Target, 6 Flat, 7 Blip
+    int   design = 1;         // Vintage is the default
+    int   orbStyle = 4;       // 0 Glow, 1 Sphere, 2 Ring, 3 Pulse, 4 Lamp, 5 Target, 6 Flat, 7 Blip
     int   colourMode = 0;     // 0 Spectrum, 1 Track colour, 2 Design accents
     int   background = 0;     // Classic only: 0 Gradient, 1 Solid, 2 Stars, 3 Nebula
-    int   floorStyle = 0;     // 0 Grid, 1 Dots, 2 Polar, 3 None
-    int   spectrumStyle = 0;  // 0 Filled, 1 Line, 2 Bars
+    int   floorStyle = 2;     // 0 Grid, 1 Dots, 2 Polar, 3 None
+    int   spectrumStyle = 2;  // 0 Filled, 1 Line, 2 Bars
     int   headStyle = 0;      // 0 Head, 1 Dot, 2 Headphones
 
     float orbSize = 1.0f, glow = 1.0f, trailLen = 1.0f, labelSize = 1.0f;
@@ -177,6 +177,7 @@ inline void save()
 {
     auto& s = get();
     juce::XmlElement x ("LOOK");
+    x.setAttribute ("ver", 3);
     x.setAttribute ("design", s.design);
     x.setAttribute ("orbStyle", s.orbStyle);
     x.setAttribute ("colourMode", s.colourMode); x.setAttribute ("background", s.background);
@@ -209,7 +210,7 @@ inline LookSettings& get()
     if (! loaded)
     {
         loaded = true;
-        if (auto x = juce::XmlDocument::parse (settingsFile()))
+        if (auto x = juce::XmlDocument::parse (settingsFile()); x != nullptr && x->getIntAttribute ("ver", 0) >= 3)
         {
             s.design = x->getIntAttribute ("design", s.design);
             s.orbStyle = x->getIntAttribute ("orbStyle", s.orbStyle);

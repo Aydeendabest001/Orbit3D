@@ -93,7 +93,11 @@ private:
     int slotIndex = -1;
     double sr = 44100.0;
 
-    orbit::BinauralSource srcL, srcR;
+    orbit::BinauralSource srcL, srcR, srcM;
+    std::vector<float> pdBuf;
+    int pdPos = 0;
+    float pdCur = 200.0f, hpState = 0.0f;
+    juce::AudioBuffer<float> wet;
     juce::Reverb reverb;
     juce::AudioBuffer<float> work;
     juce::SmoothedValue<float> gainSmooth;

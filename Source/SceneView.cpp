@@ -349,6 +349,14 @@ void SceneView::drawBackground (Graphics& g)
         g.setGradientFill (ColourGradient (ui::bg1.brighter (0.15f), b.getCentreX(), b.getCentreY() * 0.9f,
                                            ui::bg0.darker (0.5f), b.getRight(), b.getBottom(), true));
         g.fillRect (b);
+        {   // fixed film grain
+            Random rnd (11);
+            for (int i = 0; i < 700; ++i)
+            {
+                g.setColour (Colour (0xfff0e2c0).withAlpha (0.02f + 0.05f * rnd.nextFloat()));
+                g.fillRect (rnd.nextFloat() * b.getWidth(), rnd.nextFloat() * b.getHeight(), 1.2f, 1.2f);
+            }
+        }
         return;
     }
     case ui::Blueprint:
