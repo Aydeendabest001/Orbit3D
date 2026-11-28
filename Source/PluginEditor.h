@@ -104,6 +104,9 @@ private:
     void computeGrab (juce::Point<float>, bool shift);
     void applyMove (int slot, V3 desiredVisiblePos);
     juce::Colour orbColour (int slot) const;
+    float sweepAngle() const { return std::fmod ((float) tick * 0.035f, juce::MathConstants<float>::twoPi); }
+    void drawFrameOverlay (juce::Graphics&);
+    void drawLabel (juce::Graphics&, const SlotView&, float cx, float cy, float r, bool self, bool sel, float alpha);
 
     void drawBackground (juce::Graphics&);
     void drawRoom (juce::Graphics&, const Camera&);
@@ -165,6 +168,7 @@ public:
     explicit MovePage (Orbit3DProcessor&);
     void paint (juce::Graphics&) override;
     void resized() override;
+    void lookAndFeelChanged() override;
 private:
     void timerCallback() override;
     void setSpherical (bool sph);
@@ -181,6 +185,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> motionAttach, divAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAttach, revAttach;
     bool spherical = false, updatingSph = false;
+    int appliedDesign = -1;
     std::vector<std::pair<juce::String, juce::Rectangle<int>>> sections;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MovePage)

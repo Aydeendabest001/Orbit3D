@@ -26,15 +26,92 @@ float textWidth (const Font& f, const String& t)
 
 void paintSections (Graphics& g, const std::vector<std::pair<String, Rectangle<int>>>& sections)
 {
-    g.setFont (ui::font (10.5f, true));
+    const auto f = ui::design == ui::Radar ? ui::mono (10.5f, true) : ui::font (10.5f, true);
+    g.setFont (f);
     for (auto& s : sections)
     {
-        g.setColour (ui::dim);
-        g.drawText (s.first, s.second, Justification::centredLeft);
-        g.setColour (ui::border);
-        const int tw = (int) textWidth (ui::font (10.5f, true), s.first) + 10;
-        g.drawHorizontalLine (s.second.getCentreY(), (float) (s.second.getX() + tw), (float) s.second.getRight());
+        String t = s.first;
+        if (ui::design == ui::Vintage) t = t.toLowerCase();
+        if (ui::design == ui::Radar) t = "> " + t;
+        g.setColour (ui::design == ui::Swiss ? pn::text : pn::dim);
+        g.drawText (t, s.second, Justification::centredLeft);
+        const int tw = (int) textWidth (f, t) + 10;
+        const float ly = (float) s.second.getCentreY();
+        if (ui::design == ui::Swiss)
+        {
+            g.setColour (pn::border);
+            g.fillRect ((float) (s.second.getX() + tw), ly - 1.0f, (float) (s.second.getRight() - s.second.getX() - tw), 2.0f);
+        }
+        else if (ui::design == ui::Vintage)
+        {
+            g.setColour (pn::border);
+            g.drawHorizontalLine ((int) ly - 1, (float) (s.second.getX() + tw), (float) s.second.getRight());
+            g.setColour (Colours::white.withAlpha (0.5f));
+            g.drawHorizontalLine ((int) ly, (float) (s.second.getX() + tw), (float) s.second.getRight());
+        }
+        else if (ui::design == ui::Blueprint)
+        {
+            const float dl[] = { 4.0f, 3.0f };
+            g.setColour (pn::border);
+            g.drawDashedLine (Line<float> ((float) (s.second.getX() + tw), ly, (float) s.second.getRight(), ly), dl, 2, 1.0f);
+        }
+        else
+        {
+            g.setColour (pn::border);
+            g.drawHorizontalLine ((int) ly, (float) (s.second.getX() + tw), (float) s.second.getRight());
+        }
     }
+}
+
+void paintCard (Graphics& g, Rectangle<float> r)
+{
+    switch (ui::design)
+    {
+    case ui::Vintage:
+        g.setColour (Colour (0xff2a1d10));            // recessed dark glass window
+        g.fillRoundedRectangle (r, 3.0f);
+        g.setColour (Colour (0xffb8a46a));
+        g.drawRoundedRectangle (r.reduced (0.5f), 3.0f, 2.0f);
+        g.setColour (Colours::black.withAlpha (0.5f));
+        g.drawRoundedRectangle (r.reduced (3.0f), 2.0f, 1.0f);
+        break;
+    case ui::Blueprint:
+        g.setColour (pn::bg0.withAlpha (0.6f)); g.fillRect (r);
+        g.setColour (pn::text); g.drawRect (r.reduced (0.5f), 1.0f);
+        break;
+    case ui::Swiss:
+        g.setColour (pn::bg0); g.fillRect (r);
+        g.setColour (pn::border); g.drawRect (r.reduced (1.0f), 2.0f);
+        break;
+    case ui::Radar:
+        g.setColour (pn::bg0); g.fillRect (r);
+        g.setColour (pn::border); g.drawRect (r.reduced (0.5f), 1.0f);
+        break;
+    case ui::Studio:
+        g.setColour (pn::bg1); g.fillRoundedRectangle (r, 4.0f);
+        g.setColour (pn::border); g.drawRoundedRectangle (r.reduced (0.5f), 4.0f, 1.0f);
+        break;
+    default:
+        g.setColour (pn::bg1);
+        g.fillRoundedRectangle (r, 10.0f);
+        g.setColour (pn::border);
+        g.drawRoundedRectangle (r.reduced (0.5f), 10.0f, 1.0f);
+        break;
+    }
+}
+
+// Cards that sit on a window: text must be legible on the *card* colour, not the panel.
+Colour cardText() { return ui::design == ui::Vintage ? Colour (0xfff0e2c0) : pn::text; }
+Colour cardBar() { return ui::design == ui::Vintage ? Colour (0xff3d2d1b) : (ui::design == ui::Swiss ? pn::border.withAlpha (0.15f) : pn::panel); }
+Colour cardDim()  { return ui::design == ui::Vintage ? Colour (0xff9a8760) : pn::dim; }
+
+void paintRow (Graphics& g, Rectangle<float> rr, bool sel)
+{
+    const float cr = ui::design == ui::Classic ? 7.0f : (ui::design == ui::Studio ? 3.0f : (ui::design == ui::Vintage ? 2.0f : 0.0f));
+    g.setColour (sel ? pn::cyan.withAlpha (ui::design == ui::Swiss ? 1.0f : 0.14f) : (ui::design == ui::Blueprint ? Colours::transparentBlack : pn::bg1));
+    g.fillRoundedRectangle (rr, cr);
+    g.setColour (sel ? (ui::design == ui::Swiss ? pn::border : pn::cyan) : pn::border);
+    g.drawRoundedRectangle (rr.reduced (0.5f), cr, ui::design == ui::Swiss ? 1.6f : 1.0f);
 }
 
 Colour spectrumColourFor (const SlotView& v)
@@ -43,7 +120,7 @@ Colour spectrumColourFor (const SlotView& v)
     const float sum = wl + wm + wh;
     if (sum < 1.0e-4f)
         return v.trackColour.withMultipliedBrightness (0.6f);
-    const auto lo = ui::pink, mi = ui::amber, hi = ui::cyan;
+    const auto lo = pn::pink, mi = pn::amber, hi = pn::cyan;
     const float a = wl / sum, b = wm / sum, c = wh / sum;
     return Colour::fromFloatRGBA (a * lo.getFloatRed()   + b * mi.getFloatRed()   + c * hi.getFloatRed(),
                                   a * lo.getFloatGreen() + b * mi.getFloatGreen() + c * hi.getFloatGreen(),
@@ -56,29 +133,65 @@ OrbitLookAndFeel::OrbitLookAndFeel() { refresh(); }
 
 void OrbitLookAndFeel::refresh()
 {
-    setColour (Slider::textBoxTextColourId, ui::text);
+    const bool vint = ui::design == ui::Vintage;
+    setColour (Slider::textBoxTextColourId, pn::text);
     setColour (Slider::textBoxOutlineColourId, Colours::transparentBlack);
     setColour (Slider::textBoxBackgroundColourId, Colours::transparentBlack);
-    setColour (Slider::textBoxHighlightColourId, ui::cyan.withAlpha (0.3f));
-    setColour (TextEditor::backgroundColourId, ui::bg1);
-    setColour (TextEditor::textColourId, ui::text);
-    setColour (TextEditor::outlineColourId, ui::border);
-    setColour (TextEditor::focusedOutlineColourId, ui::cyan);
-    setColour (TextEditor::highlightColourId, ui::cyan.withAlpha (0.3f));
-    setColour (TextEditor::highlightedTextColourId, ui::text);
-    setColour (CaretComponent::caretColourId, ui::cyan);
-    setColour (TextButton::textColourOffId, ui::dim);
-    setColour (TextButton::textColourOnId, ui::text);
-    setColour (Label::textColourId, ui::text);
-    setColour (ComboBox::textColourId, ui::text);
-    setColour (ComboBox::backgroundColourId, ui::bg1);
-    setColour (ComboBox::outlineColourId, ui::border);
-    setColour (PopupMenu::backgroundColourId, ui::panel);
-    setColour (PopupMenu::textColourId, ui::text);
-    setColour (PopupMenu::highlightedBackgroundColourId, ui::cyan.withAlpha (0.25f));
-    setColour (PopupMenu::highlightedTextColourId, ui::text);
-    setColour (ScrollBar::thumbColourId, ui::border.brighter (0.7f));
+    setColour (Slider::textBoxHighlightColourId, pn::cyan.withAlpha (0.3f));
+    setColour (TextEditor::backgroundColourId, vint ? pn::bg0.darker (0.08f) : pn::bg1);
+    setColour (TextEditor::textColourId, pn::text);
+    setColour (TextEditor::outlineColourId, pn::border);
+    setColour (TextEditor::focusedOutlineColourId, pn::cyan);
+    setColour (TextEditor::highlightColourId, pn::cyan.withAlpha (0.3f));
+    setColour (TextEditor::highlightedTextColourId, pn::text);
+    setColour (CaretComponent::caretColourId, pn::cyan);
+    setColour (TextButton::textColourOffId, pn::dim);
+    setColour (TextButton::textColourOnId, (ui::design == ui::Blueprint || ui::design == ui::Swiss) ? pn::bg0 : pn::text);
+    setColour (Label::textColourId, pn::text);
+    setColour (ComboBox::textColourId, pn::text);
+    setColour (ComboBox::backgroundColourId, pn::bg1);
+    setColour (ComboBox::outlineColourId, pn::border);
+    setColour (PopupMenu::backgroundColourId, pn::panel);
+    setColour (PopupMenu::textColourId, pn::text);
+    setColour (PopupMenu::highlightedBackgroundColourId, pn::cyan.withAlpha (0.25f));
+    setColour (PopupMenu::highlightedTextColourId, pn::text);
+    setColour (ScrollBar::thumbColourId, pn::border.brighter (pn::light ? 0.0f : 0.7f));
     setColour (ScrollBar::backgroundColourId, Colours::transparentBlack);
+}
+
+namespace
+{
+float cornerFor()
+{
+    switch (ui::design) { case ui::Classic: return 7.0f; case ui::Vintage: return 2.5f; case ui::Studio: return 3.0f; default: return 0.0f; }
+}
+
+void bevelRect (Graphics& g, Rectangle<float> r, Colour face, bool pressed)
+{
+    g.setColour (face);
+    g.fillRoundedRectangle (r, 2.5f);
+    g.setColour ((pressed ? Colours::black : Colours::white).withAlpha (pressed ? 0.30f : 0.45f));
+    g.drawLine (r.getX() + 1.0f, r.getY() + 0.8f, r.getRight() - 1.0f, r.getY() + 0.8f, 1.2f);
+    g.drawLine (r.getX() + 0.8f, r.getY() + 1.0f, r.getX() + 0.8f, r.getBottom() - 1.0f, 1.2f);
+    g.setColour ((pressed ? Colours::white : Colours::black).withAlpha (pressed ? 0.25f : 0.35f));
+    g.drawLine (r.getX() + 1.0f, r.getBottom() - 0.8f, r.getRight() - 1.0f, r.getBottom() - 0.8f, 1.2f);
+    g.drawLine (r.getRight() - 0.8f, r.getY() + 1.0f, r.getRight() - 0.8f, r.getBottom() - 1.0f, 1.2f);
+    g.setColour (pn::border);
+    g.drawRoundedRectangle (r, 2.5f, 1.0f);
+}
+
+void brackets (Graphics& g, Rectangle<float> r, Colour c, float len = 6.0f, float th = 1.3f)
+{
+    g.setColour (c);
+    for (int sx = 0; sx < 2; ++sx)
+        for (int sy = 0; sy < 2; ++sy)
+        {
+            const float x = sx ? r.getRight() : r.getX(), y = sy ? r.getBottom() : r.getY();
+            const float dx = sx ? -len : len, dy = sy ? -len : len;
+            g.drawLine (x, y, x + dx, y, th);
+            g.drawLine (x, y, x, y + dy, th);
+        }
+}
 }
 
 void OrbitLookAndFeel::drawRotarySlider (Graphics& g, int x, int y, int w, int h, float pos,
@@ -90,35 +203,155 @@ void OrbitLookAndFeel::drawRotarySlider (Graphics& g, int x, int y, int w, int h
     const float arcR = d * 0.5f - 3.0f;
     const float ang = a0 + pos * (a1 - a0);
     const bool bipolar = (bool) s.getProperties().getWithDefault ("bipolar", false);
-    const auto accent = ui::accent ((int) s.getProperties().getWithDefault ("accent", 0));
-
-    Path track;
-    track.addCentredArc (c.x, c.y, arcR, arcR, 0.0f, a0, a1, true);
-    g.setColour (ui::border);
-    g.strokePath (track, PathStrokeType (3.5f, PathStrokeType::curved, PathStrokeType::rounded));
-
+    const auto accent = pn::accent ((int) s.getProperties().getWithDefault ("accent", 0));
     const float from = bipolar ? (a0 + a1) * 0.5f : a0;
-    if (std::abs (ang - from) > 0.002f)
+    auto pt = [&] (float a, float r) { return Point<float> (c.x + std::sin (a) * r, c.y - std::cos (a) * r); };
+
+    switch (ui::design)
     {
-        Path val;
-        val.addCentredArc (c.x, c.y, arcR, arcR, 0.0f, jmin (from, ang), jmax (from, ang), true);
-        g.setColour (accent.withAlpha (0.16f));
-        g.strokePath (val, PathStrokeType (10.0f, PathStrokeType::curved, PathStrokeType::rounded));
-        g.setColour (accent);
-        g.strokePath (val, PathStrokeType (3.5f, PathStrokeType::curved, PathStrokeType::rounded));
+    case ui::Vintage:
+    {
+        // numbered scale ticks, bakelite knob with a brass cap and an ivory pointer
+        for (int i = 0; i <= 10; ++i)
+        {
+            const float a = a0 + (a1 - a0) * (float) i / 10.0f;
+            const bool major = (i % 5) == 0;
+            g.setColour (pn::text.withAlpha (major ? 0.9f : 0.55f));
+            g.drawLine (Line<float> (pt (a, arcR - (major ? 5.0f : 3.0f)), pt (a, arcR)), major ? 1.5f : 1.0f);
+        }
+        const float br = arcR - 8.0f;
+        g.setColour (Colours::black.withAlpha (0.28f));
+        g.fillEllipse (c.x - br + 1.5f, c.y - br + 2.5f, br * 2.0f, br * 2.0f);
+        g.setGradientFill (ColourGradient (Colour (0xff4a3526), c.x - br * 0.5f, c.y - br * 0.6f,
+                                           Colour (0xff1c120b), c.x + br * 0.7f, c.y + br * 0.8f, true));
+        g.fillEllipse (c.x - br, c.y - br, br * 2.0f, br * 2.0f);
+        g.setColour (Colour (0xffb8a46a));      // brass rim
+        g.drawEllipse (c.x - br, c.y - br, br * 2.0f, br * 2.0f, 1.6f);
+        g.setColour (Colours::white.withAlpha (0.10f));
+        g.fillEllipse (c.x - br * 0.62f, c.y - br * 0.85f, br * 0.9f, br * 0.5f);
+        const float cr = br * 0.34f;
+        g.setGradientFill (ColourGradient (Colour (0xffe6d49a), c.x - cr, c.y - cr, Colour (0xff8a7436), c.x + cr, c.y + cr, false));
+        g.fillEllipse (c.x - cr, c.y - cr, cr * 2.0f, cr * 2.0f);
+        g.setColour (Colour (0xfff6ead0));
+        g.drawLine (Line<float> (pt (ang, br * 0.40f), pt (ang, br * 0.94f)), 3.0f);
+        break;
     }
-
-    const float br = arcR - 6.0f;
-    g.setGradientFill (ColourGradient::vertical (ui::bg1.brighter (ui::light ? 0.1f : 0.35f), c.y - br,
-                                                 ui::panel.darker (ui::light ? 0.15f : 0.0f), c.y + br));
-    g.fillEllipse (c.x - br, c.y - br, br * 2.0f, br * 2.0f);
-    g.setColour (ui::border.brighter (0.35f));
-    g.drawEllipse (c.x - br, c.y - br, br * 2.0f, br * 2.0f, 1.0f);
-
-    const Point<float> p0 (c.x + std::sin (ang) * br * 0.30f, c.y - std::cos (ang) * br * 0.30f);
-    const Point<float> p1 (c.x + std::sin (ang) * br * 0.86f, c.y - std::cos (ang) * br * 0.86f);
-    g.setColour (accent.brighter (ui::light ? 0.0f : 0.4f));
-    g.drawLine (Line<float> (p0, p1), 2.6f);
+    case ui::Blueprint:
+    {
+        g.setColour (pn::border);
+        g.drawEllipse (c.x - arcR, c.y - arcR, arcR * 2.0f, arcR * 2.0f, 1.0f);
+        for (int i = 0; i <= 20; ++i)
+        {
+            const float a = a0 + (a1 - a0) * (float) i / 20.0f;
+            const bool major = (i % 5) == 0;
+            g.setColour (pn::text.withAlpha (major ? 0.95f : 0.5f));
+            g.drawLine (Line<float> (pt (a, arcR - (major ? 6.0f : 3.0f)), pt (a, arcR)), 1.0f);
+        }
+        if (std::abs (ang - from) > 0.002f)
+        {
+            Path val;
+            val.addCentredArc (c.x, c.y, arcR - 9.0f, arcR - 9.0f, 0.0f, jmin (from, ang), jmax (from, ang), true);
+            Path dashed;
+            const float dl[] = { 3.0f, 2.5f };
+            PathStrokeType (1.4f).createDashedStroke (dashed, val, dl, 2);
+            g.setColour (accent);
+            g.fillPath (dashed);
+        }
+        const float br = arcR - 14.0f;
+        g.setColour (pn::bg0.withAlpha (0.8f));
+        g.fillEllipse (c.x - br, c.y - br, br * 2.0f, br * 2.0f);
+        g.setColour (pn::text);
+        g.drawEllipse (c.x - br, c.y - br, br * 2.0f, br * 2.0f, 1.2f);
+        g.drawLine (Line<float> (c, pt (ang, br)), 1.4f);
+        g.drawLine (c.x - 3.0f, c.y, c.x + 3.0f, c.y, 1.0f);
+        g.drawLine (c.x, c.y - 3.0f, c.x, c.y + 3.0f, 1.0f);
+        break;
+    }
+    case ui::Studio:
+    {
+        Path track;
+        track.addCentredArc (c.x, c.y, arcR, arcR, 0.0f, a0, a1, true);
+        g.setColour (pn::border);
+        g.strokePath (track, PathStrokeType (2.0f, PathStrokeType::curved, PathStrokeType::butt));
+        if (std::abs (ang - from) > 0.002f)
+        {
+            Path val;
+            val.addCentredArc (c.x, c.y, arcR, arcR, 0.0f, jmin (from, ang), jmax (from, ang), true);
+            g.setColour (accent);
+            g.strokePath (val, PathStrokeType (2.0f, PathStrokeType::curved, PathStrokeType::butt));
+        }
+        const float br = arcR - 6.0f;
+        g.setColour (pn::bg1.brighter (0.06f));
+        g.fillEllipse (c.x - br, c.y - br, br * 2.0f, br * 2.0f);
+        g.setColour (pn::border.brighter (0.2f));
+        g.drawEllipse (c.x - br, c.y - br, br * 2.0f, br * 2.0f, 1.0f);
+        g.setColour (pn::text);
+        g.drawLine (Line<float> (pt (ang, br * 0.45f), pt (ang, br * 0.9f)), 2.0f);
+        break;
+    }
+    case ui::Swiss:
+    {
+        const float br = arcR - 1.0f;
+        g.setColour (pn::border);
+        g.fillEllipse (c.x - br, c.y - br, br * 2.0f, br * 2.0f);
+        g.setColour (pn::bg0);
+        g.drawLine (Line<float> (c, pt (ang, br - 3.0f)), 3.0f);
+        // value shown as a thick red/blue wedge outside the knob
+        if (std::abs (ang - from) > 0.002f)
+        {
+            Path val;
+            val.addCentredArc (c.x, c.y, br + 0.5f, br + 0.5f, 0.0f, jmin (from, ang), jmax (from, ang), true);
+            g.setColour (accent);
+            g.strokePath (val, PathStrokeType (3.0f, PathStrokeType::curved, PathStrokeType::butt));
+        }
+        break;
+    }
+    case ui::Radar:
+    {
+        const int n = 21;
+        for (int i = 0; i < n; ++i)
+        {
+            const float t = (float) i / (float) (n - 1);
+            const float a = a0 + (a1 - a0) * t;
+            const float tp = bipolar ? 0.5f : 0.0f;
+            const bool lit = bipolar ? (t >= jmin (tp, pos) - 0.001f && t <= jmax (tp, pos) + 0.001f)
+                                     : (t <= pos + 0.001f);
+            g.setColour (lit ? accent : pn::border);
+            g.drawLine (Line<float> (pt (a, arcR - 5.0f), pt (a, arcR)), lit ? 2.4f : 1.6f);
+        }
+        const float br = arcR - 10.0f;
+        g.setColour (pn::border);
+        g.drawEllipse (c.x - br, c.y - br, br * 2.0f, br * 2.0f, 1.0f);
+        g.setColour (accent);
+        g.drawLine (Line<float> (pt (ang, br * 0.25f), pt (ang, br)), 1.6f);
+        g.fillEllipse (c.x - 1.8f, c.y - 1.8f, 3.6f, 3.6f);
+        break;
+    }
+    default:
+    {
+        Path track;
+        track.addCentredArc (c.x, c.y, arcR, arcR, 0.0f, a0, a1, true);
+        g.setColour (pn::border);
+        g.strokePath (track, PathStrokeType (3.5f, PathStrokeType::curved, PathStrokeType::rounded));
+        if (std::abs (ang - from) > 0.002f)
+        {
+            Path val;
+            val.addCentredArc (c.x, c.y, arcR, arcR, 0.0f, jmin (from, ang), jmax (from, ang), true);
+            g.setColour (accent.withAlpha (0.16f));
+            g.strokePath (val, PathStrokeType (10.0f, PathStrokeType::curved, PathStrokeType::rounded));
+            g.setColour (accent);
+            g.strokePath (val, PathStrokeType (3.5f, PathStrokeType::curved, PathStrokeType::rounded));
+        }
+        const float br = arcR - 6.0f;
+        g.setGradientFill (ColourGradient::vertical (pn::bg1.brighter (0.35f), c.y - br, pn::panel, c.y + br));
+        g.fillEllipse (c.x - br, c.y - br, br * 2.0f, br * 2.0f);
+        g.setColour (pn::border.brighter (0.35f));
+        g.drawEllipse (c.x - br, c.y - br, br * 2.0f, br * 2.0f, 1.0f);
+        g.setColour (accent.brighter (0.4f));
+        g.drawLine (Line<float> (pt (ang, br * 0.30f), pt (ang, br * 0.86f)), 2.6f);
+        break;
+    }
+    }
 }
 
 void OrbitLookAndFeel::drawLinearSlider (Graphics& g, int x, int y, int w, int h, float sliderPos,
@@ -129,16 +362,74 @@ void OrbitLookAndFeel::drawLinearSlider (Graphics& g, int x, int y, int w, int h
         LookAndFeel_V4::drawLinearSlider (g, x, y, w, h, sliderPos, minPos, maxPos, style, s);
         return;
     }
-    const auto acc = ui::accent ((int) s.getProperties().getWithDefault ("accent", 0));
+    const auto acc = pn::accent ((int) s.getProperties().getWithDefault ("accent", 0));
     const float cy = (float) y + (float) h * 0.5f;
     Rectangle<float> track ((float) x + 3.0f, cy - 2.0f, (float) w - 6.0f, 4.0f);
-    g.setColour (ui::border);
+
+    switch (ui::design)
+    {
+    case ui::Vintage:
+    {
+        auto groove = track.withHeight (5.0f).withCentre ({ track.getCentreX(), cy });
+        g.setColour (Colours::black.withAlpha (0.55f));
+        g.fillRoundedRectangle (groove, 2.0f);
+        g.setColour (pn::border);
+        g.drawRoundedRectangle (groove, 2.0f, 1.0f);
+        Rectangle<float> cap (sliderPos - 6.0f, cy - 10.0f, 12.0f, 20.0f);
+        bevelRect (g, cap, Colour (0xff3a2a1c), false);
+        g.setColour (Colour (0xfff0e2c0));
+        g.drawLine (sliderPos, cy - 8.0f, sliderPos, cy + 8.0f, 1.6f);
+        return;
+    }
+    case ui::Blueprint:
+        g.setColour (pn::text.withAlpha (0.8f));
+        g.drawLine (track.getX(), cy, track.getRight(), cy, 1.0f);
+        for (int i = 0; i <= 10; ++i)
+            g.drawLine (track.getX() + track.getWidth() * (float) i / 10.0f, cy - 3.0f,
+                        track.getX() + track.getWidth() * (float) i / 10.0f, cy + 3.0f, 1.0f);
+        g.setColour (pn::cyan);
+        g.drawLine (sliderPos, cy - 8.0f, sliderPos, cy + 8.0f, 1.6f);
+        {
+            Path tri; tri.addTriangle (sliderPos - 4.0f, cy - 12.0f, sliderPos + 4.0f, cy - 12.0f, sliderPos, cy - 6.0f);
+            g.fillPath (tri);
+        }
+        return;
+    case ui::Studio:
+        g.setColour (pn::border);
+        g.fillRect (track.withHeight (2.0f).withCentre ({ track.getCentreX(), cy }));
+        g.setColour (acc);
+        g.fillRect (Rectangle<float> (track.getX(), cy - 1.0f, jmax (1.0f, sliderPos - track.getX()), 2.0f));
+        g.setColour (pn::text);
+        g.fillEllipse (sliderPos - 5.0f, cy - 5.0f, 10.0f, 10.0f);
+        return;
+    case ui::Swiss:
+        g.setColour (pn::border.withAlpha (0.18f));
+        g.fillRect (track.withHeight (8.0f).withCentre ({ track.getCentreX(), cy }));
+        g.setColour (pn::border);
+        g.fillRect (Rectangle<float> (track.getX(), cy - 4.0f, jmax (1.0f, sliderPos - track.getX()), 8.0f));
+        g.setColour (acc);
+        g.fillRect (Rectangle<float> (sliderPos - 2.5f, cy - 10.0f, 5.0f, 20.0f));
+        return;
+    case ui::Radar:
+    {
+        const int n = 24;
+        for (int i = 0; i < n; ++i)
+        {
+            const float px = track.getX() + track.getWidth() * (float) i / (float) (n - 1);
+            g.setColour (px <= sliderPos ? acc : pn::border);
+            g.fillRect (px - 1.2f, cy - 5.0f, 2.4f, 10.0f);
+        }
+        return;
+    }
+    default: break;
+    }
+    g.setColour (pn::border);
     g.fillRoundedRectangle (track, 2.0f);
     g.setColour (acc);
     g.fillRoundedRectangle (track.withRight (jmax (track.getX() + 1.0f, sliderPos)), 2.0f);
     g.setColour (acc.withAlpha (0.22f));
     g.fillEllipse (sliderPos - 9.0f, cy - 9.0f, 18.0f, 18.0f);
-    g.setColour (ui::light ? ui::panel : ui::text);
+    g.setColour (pn::text);
     g.fillEllipse (sliderPos - 5.5f, cy - 5.5f, 11.0f, 11.0f);
     g.setColour (acc);
     g.drawEllipse (sliderPos - 5.5f, cy - 5.5f, 11.0f, 11.0f, 1.5f);
@@ -148,44 +439,159 @@ void OrbitLookAndFeel::drawButtonBackground (Graphics& g, Button& b, const Colou
 {
     auto r = b.getLocalBounds().toFloat().reduced (0.5f);
     const bool on = b.getToggleState();
-    auto base = on ? ui::cyan.withAlpha (0.20f) : ui::bg1;
+    switch (ui::design)
+    {
+    case ui::Vintage:
+        bevelRect (g, r, on ? Colour (0xffb89a5a) : pn::bg1.darker (hover ? 0.0f : 0.05f), on || down);
+        return;
+    case ui::Blueprint:
+        g.setColour (on ? pn::text : Colours::transparentBlack);
+        g.fillRect (r);
+        g.setColour (hover || on ? pn::text : pn::dim);
+        g.drawRect (r, 1.0f);
+        return;
+    case ui::Swiss:
+        g.setColour (on ? pn::border : (hover ? pn::bg1 : pn::bg0));
+        g.fillRect (r);
+        g.setColour (pn::border);
+        g.drawRect (r, 1.6f);
+        return;
+    case ui::Radar:
+        g.setColour (on ? pn::cyan.withAlpha (0.18f) : Colours::transparentBlack);
+        g.fillRect (r);
+        brackets (g, r, on ? pn::cyan : (hover ? pn::text : pn::dim));
+        return;
+    case ui::Studio:
+        g.setColour (on ? pn::cyan.withAlpha (0.16f) : (hover ? pn::bg1.brighter (0.08f) : pn::bg1));
+        g.fillRoundedRectangle (r, 3.0f);
+        g.setColour (on ? pn::cyan : pn::border);
+        g.drawRoundedRectangle (r, 3.0f, 1.0f);
+        return;
+    default: break;
+    }
+    auto base = on ? pn::cyan.withAlpha (0.20f) : pn::bg1;
     if (hover) base = base.brighter (0.12f);
     if (down)  base = base.brighter (0.25f);
     g.setColour (base);
     g.fillRoundedRectangle (r, 7.0f);
-    g.setColour (on ? ui::cyan : (hover ? ui::dim : ui::border));
+    g.setColour (on ? pn::cyan : (hover ? pn::dim : pn::border));
     g.drawRoundedRectangle (r, 7.0f, 1.0f);
 }
 
 void OrbitLookAndFeel::drawToggleButton (Graphics& g, ToggleButton& b, bool hover, bool)
 {
     auto r = b.getLocalBounds().toFloat();
-    const float sw = 34.0f, sh = 18.0f;
-    Rectangle<float> pill (r.getX() + 2.0f, r.getCentreY() - sh * 0.5f, sw, sh);
     const bool on = b.getToggleState();
-    g.setColour (on ? ui::cyan.withAlpha (0.25f) : ui::bg1);
-    g.fillRoundedRectangle (pill, sh * 0.5f);
-    g.setColour (on ? ui::cyan : ui::border);
-    g.drawRoundedRectangle (pill, sh * 0.5f, 1.2f);
-    const float kx = on ? pill.getRight() - sh + 2.0f : pill.getX() + 2.0f;
-    g.setColour (on ? ui::cyan : ui::dim);
-    g.fillEllipse (kx, pill.getY() + 2.0f, sh - 4.0f, sh - 4.0f);
-    g.setColour (hover ? ui::text : ui::text.withAlpha (0.85f));
-    g.setFont (ui::font (12.5f));
+    float sw = 34.0f;
+    const float sh = 18.0f;
+    Rectangle<float> pill (r.getX() + 2.0f, r.getCentreY() - sh * 0.5f, sw, sh);
+
+    switch (ui::design)
+    {
+    case ui::Vintage:
+    {
+        // pilot lamp in a brass bezel
+        sw = 22.0f;
+        const auto c = Point<float> (r.getX() + 12.0f, r.getCentreY());
+        g.setColour (Colour (0xffb8a46a));
+        g.fillEllipse (c.x - 9.0f, c.y - 9.0f, 18.0f, 18.0f);
+        g.setColour (Colour (0xff2a1d10));
+        g.fillEllipse (c.x - 7.0f, c.y - 7.0f, 14.0f, 14.0f);
+        if (on)
+        {
+            g.setColour (pn::cyan.withAlpha (0.30f));
+            g.fillEllipse (c.x - 11.0f, c.y - 11.0f, 22.0f, 22.0f);
+            g.setGradientFill (ColourGradient (Colour (0xffffe9a8), c.x - 2.0f, c.y - 2.5f, Colour (0xffe0902a), c.x + 6.0f, c.y + 6.0f, true));
+        }
+        else g.setColour (Colour (0xff4a3a28));
+        g.fillEllipse (c.x - 5.5f, c.y - 5.5f, 11.0f, 11.0f);
+        break;
+    }
+    case ui::Blueprint:
+    {
+        sw = 18.0f;
+        Rectangle<float> bx (r.getX() + 2.0f, r.getCentreY() - 7.0f, 14.0f, 14.0f);
+        g.setColour (pn::text);
+        g.drawRect (bx, 1.2f);
+        if (on) { g.drawLine (bx.getX() + 2, bx.getY() + 2, bx.getRight() - 2, bx.getBottom() - 2, 1.6f);
+                  g.drawLine (bx.getRight() - 2, bx.getY() + 2, bx.getX() + 2, bx.getBottom() - 2, 1.6f); }
+        break;
+    }
+    case ui::Swiss:
+    {
+        sw = 20.0f;
+        Rectangle<float> bx (r.getX() + 2.0f, r.getCentreY() - 8.0f, 16.0f, 16.0f);
+        g.setColour (on ? pn::border : pn::bg0);
+        g.fillRect (bx);
+        g.setColour (pn::border);
+        g.drawRect (bx, 2.0f);
+        if (on) { g.setColour (pn::cyan); g.fillRect (bx.reduced (5.0f)); }
+        break;
+    }
+    case ui::Radar:
+    {
+        sw = 28.0f;
+        g.setColour (on ? pn::cyan : pn::dim);
+        g.setFont (ui::mono (13.0f, true));
+        g.drawText (on ? "[X]" : "[ ]", Rectangle<float> (r.getX(), r.getY(), sw, r.getHeight()).toNearestInt(), Justification::centredLeft);
+        break;
+    }
+    case ui::Studio:
+    {
+        sw = 28.0f;
+        Rectangle<float> p2 (r.getX() + 2.0f, r.getCentreY() - 7.0f, 26.0f, 14.0f);
+        g.setColour (on ? pn::cyan : pn::border);
+        g.fillRoundedRectangle (p2, 3.0f);
+        g.setColour (on ? pn::bg0 : pn::dim);
+        g.fillRoundedRectangle (Rectangle<float> (on ? p2.getRight() - 12.0f : p2.getX() + 2.0f, p2.getY() + 2.0f, 10.0f, 10.0f), 2.0f);
+        break;
+    }
+    default:
+    {
+        g.setColour (on ? pn::cyan.withAlpha (0.25f) : pn::bg1);
+        g.fillRoundedRectangle (pill, sh * 0.5f);
+        g.setColour (on ? pn::cyan : pn::border);
+        g.drawRoundedRectangle (pill, sh * 0.5f, 1.2f);
+        const float kx = on ? pill.getRight() - sh + 2.0f : pill.getX() + 2.0f;
+        g.setColour (on ? pn::cyan : pn::dim);
+        g.fillEllipse (kx, pill.getY() + 2.0f, sh - 4.0f, sh - 4.0f);
+        break;
+    }
+    }
+    g.setColour (hover ? pn::text : pn::text.withAlpha (0.85f));
+    g.setFont (ui::design == ui::Radar ? ui::mono (12.0f) : ui::font (12.5f, ui::design == ui::Swiss));
     g.drawText (b.getButtonText(), r.withTrimmedLeft (sw + 12.0f).toNearestInt(), Justification::centredLeft);
 }
 
 void OrbitLookAndFeel::drawComboBox (Graphics& g, int w, int h, bool, int, int, int, int, ComboBox& box)
 {
     Rectangle<float> r (0.0f, 0.0f, (float) w, (float) h);
-    g.setColour (ui::bg1);
-    g.fillRoundedRectangle (r.reduced (0.5f), 7.0f);
-    g.setColour (box.hasKeyboardFocus (true) ? ui::cyan : ui::border);
-    g.drawRoundedRectangle (r.reduced (0.5f), 7.0f, 1.0f);
+    const float cr = cornerFor();
+    const bool focus = box.hasKeyboardFocus (true);
+    if (ui::design == ui::Radar)
+    {
+        brackets (g, r.reduced (0.5f), focus ? pn::cyan : pn::dim);
+    }
+    else if (ui::design == ui::Vintage)
+    {
+        g.setColour (Colour (0xff2a1d10));
+        g.fillRoundedRectangle (r.reduced (0.5f), cr);
+        g.setColour (Colours::black.withAlpha (0.5f));
+        g.drawLine (1.0f, 1.0f, (float) w - 1.0f, 1.0f, 2.0f);
+        g.setColour (pn::border);
+        g.drawRoundedRectangle (r.reduced (0.5f), cr, 1.0f);
+    }
+    else
+    {
+        g.setColour (ui::design == ui::Blueprint ? Colours::transparentBlack : pn::bg1);
+        g.fillRoundedRectangle (r.reduced (0.5f), cr);
+        g.setColour (focus ? pn::cyan : (ui::design == ui::Swiss ? pn::border : pn::border));
+        g.drawRoundedRectangle (r.reduced (0.5f), cr, ui::design == ui::Swiss ? 1.6f : 1.0f);
+    }
     Path p;
     const float ax = (float) w - 16.0f, ay = (float) h * 0.5f;
     p.addTriangle (ax - 4.0f, ay - 2.0f, ax + 4.0f, ay - 2.0f, ax, ay + 3.0f);
-    g.setColour (ui::dim);
+    g.setColour (ui::design == ui::Vintage ? Colour (0xffe8d9a8) : pn::dim);
     g.fillPath (p);
 }
 
@@ -193,6 +599,7 @@ void OrbitLookAndFeel::positionComboBoxText (ComboBox& box, Label& label)
 {
     label.setBounds (10, 1, box.getWidth() - 30, box.getHeight() - 2);
     label.setFont (getComboBoxFont (box));
+    label.setColour (Label::textColourId, ui::design == ui::Vintage ? Colour (0xfff0e2c0) : pn::text);
 }
 
 //==============================================================================
@@ -232,17 +639,18 @@ void Knob::setup (int accentIndex, bool bipolar)
 
 void Knob::lookAndFeelChanged()
 {
-    slider.setColour (Slider::textBoxTextColourId, ui::text);
+    slider.setColour (Slider::textBoxTextColourId, pn::text);
     slider.setColour (Slider::textBoxOutlineColourId, Colours::transparentBlack);
     slider.setColour (Slider::textBoxBackgroundColourId, Colours::transparentBlack);
-    slider.setColour (Slider::textBoxHighlightColourId, ui::cyan.withAlpha (0.3f));
+    slider.setColour (Slider::textBoxHighlightColourId, pn::cyan.withAlpha (0.3f));
 }
 
 void Knob::paint (Graphics& g)
 {
-    g.setColour (ui::dim);
-    g.setFont (ui::font (10.5f, true));
-    g.drawText (titleText, getLocalBounds().removeFromTop (14), Justification::centred);
+    g.setColour (ui::design == ui::Swiss ? pn::text : pn::dim);
+    g.setFont (ui::design == ui::Radar ? ui::mono (10.0f, true) : ui::font (10.5f, true));
+    g.drawText (ui::design == ui::Vintage ? titleText.toLowerCase() : (ui::design == ui::Radar ? titleText.toUpperCase() : titleText),
+                getLocalBounds().removeFromTop (14), Justification::centred);
 }
 
 void Knob::resized() { slider.setBounds (getLocalBounds().withTrimmedTop (14)); }
@@ -260,7 +668,7 @@ MovePage::MovePage (Orbit3DProcessor& p)
       kDepth (p.apvts, "mdepth", "DEPTH", 1, false)
 {
     nameEditor.setMultiLine (false);
-    nameEditor.setTextToShowWhenEmpty ("Track name (auto from Reaper)", ui::dim);
+    nameEditor.setTextToShowWhenEmpty ("Track name (auto from Reaper)", pn::dim);
     nameEditor.setFont (ui::font (13.0f));
     nameEditor.setInputRestrictions (40);
     nameEditor.setText (proc.getLabel(), false);
@@ -347,6 +755,15 @@ void MovePage::applySpherical()
 
 void MovePage::timerCallback()
 {
+    if (appliedDesign != ui::design)
+    {
+        appliedDesign = ui::design;
+        nameEditor.setColour (TextEditor::textColourId, pn::text);
+        nameEditor.applyColourToAllText (pn::text, true);
+        nameEditor.applyFontToAllText (ui::font (13.0f), true);
+        nameEditor.setTextToShowWhenEmpty ("Track name (auto from Reaper)", pn::dim);
+        nameEditor.repaint();
+    }
     const bool sync = syncToggle.getToggleState();
     if (divBox.isVisible() != sync)
     {
@@ -374,6 +791,8 @@ void MovePage::timerCallback()
     }
     updatingSph = false;
 }
+
+void MovePage::lookAndFeelChanged() { appliedDesign = -1; }
 
 void MovePage::paint (Graphics& g) { paintSections (g, sections); }
 
@@ -486,10 +905,7 @@ void SoundPage::paint (Graphics& g)
     if (area.getHeight() < 70) return;
 
     auto r = area.toFloat();
-    g.setColour (ui::bg1);
-    g.fillRoundedRectangle (r, 10.0f);
-    g.setColour (ui::border);
-    g.drawRoundedRectangle (r.reduced (0.5f), 10.0f, 1.0f);
+    paintCard (g, r);
 
     auto in = r.reduced (12.0f, 8.0f);
     const float x = proc.apvts.getRawParameterValue ("x")->load();
@@ -506,10 +922,10 @@ void SoundPage::paint (Graphics& g)
     for (int i = 0; i < 3; ++i)
     {
         auto c = cols.removeFromLeft (cw);
-        g.setColour (ui::dim);
+        g.setColour (cardDim());
         g.setFont (ui::font (9.5f, true));
         g.drawText (labels[i], c.removeFromTop (12.0f).toNearestInt(), Justification::centredLeft);
-        g.setColour (ui::text);
+        g.setColour (cardText());
         g.setFont (ui::font (15.0f, true));
         g.drawText (values[i], c.toNearestInt(), Justification::centredLeft);
     }
@@ -517,15 +933,15 @@ void SoundPage::paint (Graphics& g)
 
     auto bar = [&] (Rectangle<float> b, float lin, const String& name)
     {
-        g.setColour (ui::dim);
+        g.setColour (cardDim());
         g.setFont (ui::font (9.5f, true));
         g.drawText (name, b.removeFromLeft (14.0f).toNearestInt(), Justification::centredLeft);
-        g.setColour (ui::panel);
+        g.setColour (cardBar());
         g.fillRoundedRectangle (b, 2.5f);
         const float t = jlimit (0.0f, 1.0f, (toDb (lin) + 60.0f) / 60.0f);
         if (t > 0.01f)
         {
-            g.setGradientFill (ColourGradient (ui::cyan, b.getX(), 0.0f, ui::pink, b.getRight(), 0.0f, false));
+            g.setGradientFill (ColourGradient (pn::cyan, b.getX(), 0.0f, pn::pink, b.getRight(), 0.0f, false));
             g.fillRoundedRectangle (b.withWidth (b.getWidth() * t), 2.5f);
         }
     };
@@ -535,19 +951,19 @@ void SoundPage::paint (Graphics& g)
     in.removeFromTop (8.0f);
 
     const float corr = proc.ownCorr.load();
-    g.setColour (ui::dim);
+    g.setColour (cardDim());
     g.setFont (ui::font (9.5f, true));
     g.drawText ("STEREO CORRELATION", in.removeFromTop (12.0f).toNearestInt(), Justification::centredLeft);
     auto cb = in.removeFromTop (8.0f);
-    g.setColour (ui::panel);
+    g.setColour (cardBar());
     g.fillRoundedRectangle (cb, 3.0f);
-    g.setGradientFill (ColourGradient (ui::pink, cb.getX(), 0.0f, ui::cyan, cb.getRight(), 0.0f, false));
+    g.setGradientFill (ColourGradient (pn::pink, cb.getX(), 0.0f, pn::cyan, cb.getRight(), 0.0f, false));
     g.setOpacity (0.45f);
     g.fillRoundedRectangle (cb, 3.0f);
-    g.setColour (ui::border.brighter (0.5f));
+    g.setColour (pn::border.brighter (0.5f));
     g.drawVerticalLine ((int) cb.getCentreX(), cb.getY() - 2.0f, cb.getBottom() + 2.0f);
     const float mx = cb.getX() + (corr + 1.0f) * 0.5f * cb.getWidth();
-    g.setColour (ui::text);
+    g.setColour (cardText());
     g.fillEllipse (mx - 4.0f, cb.getCentreY() - 4.0f, 8.0f, 8.0f);
 }
 
@@ -635,20 +1051,17 @@ void MasterPage::paint (Graphics& g)
 
             Rectangle<float> rr ((float) listRect.getX(), (float) y, (float) listRect.getWidth(), 26.0f);
             const bool sel = i == scene.selectedSlot;
-            g.setColour (sel ? ui::cyan.withAlpha (0.14f) : ui::bg1);
-            g.fillRoundedRectangle (rr, 7.0f);
-            g.setColour (sel ? ui::cyan : ui::border);
-            g.drawRoundedRectangle (rr.reduced (0.5f), 7.0f, 1.0f);
+            paintRow (g, rr, sel);
 
             g.setColour (v.trackColour.withAlpha (v.stale ? 0.4f : 1.0f));
             g.fillEllipse (rr.getX() + 9.0f, rr.getCentreY() - 5.0f, 10.0f, 10.0f);
-            g.setColour (v.stale ? ui::dim : ui::text);
+            g.setColour (v.stale ? pn::dim : pn::text);
             g.setFont (ui::font (12.5f));
             g.drawText (v.name, Rectangle<float> (rr.getX() + 26.0f, rr.getY(), rr.getWidth() - 92.0f, rr.getHeight()).toNearestInt(),
                         Justification::centredLeft, true);
 
             Rectangle<float> lb (rr.getRight() - 58.0f, rr.getCentreY() - 3.0f, 48.0f, 6.0f);
-            g.setColour (ui::panel);
+            g.setColour (pn::panel);
             g.fillRoundedRectangle (lb, 3.0f);
             if (v.lvl > 0.01f)
             {
@@ -658,7 +1071,7 @@ void MasterPage::paint (Graphics& g)
         }
         if (row == 0)
         {
-            g.setColour (ui::dim);
+            g.setColour (pn::dim);
             g.setFont (ui::font (12.0f));
             g.drawFittedText ("No tracks yet.\n\nInsert Orbit 3D on your tracks (Track mode) and they will appear here, floating in the room.",
                               listRect.reduced (10), Justification::centredTop, 6);
@@ -666,14 +1079,11 @@ void MasterPage::paint (Graphics& g)
     }
 
     auto r = detailRect.toFloat();
-    g.setColour (ui::bg1);
-    g.fillRoundedRectangle (r, 10.0f);
-    g.setColour (ui::border);
-    g.drawRoundedRectangle (r.reduced (0.5f), 10.0f, 1.0f);
+    paintCard (g, r);
 
     if (scene.selectedSlot < 0 || ! views[(size_t) scene.selectedSlot].active)
     {
-        g.setColour (ui::dim);
+        g.setColour (cardDim());
         g.setFont (ui::font (12.0f));
         g.drawFittedText ("Click an orb or a row to inspect a track.\nDrag an orb to move that track in 3D.",
                           detailRect.reduced (14), Justification::centred, 4);
@@ -682,10 +1092,10 @@ void MasterPage::paint (Graphics& g)
 
     const auto& v = views[(size_t) scene.selectedSlot];
     auto in = r.reduced (12.0f, 10.0f);
-    g.setColour (ui::text);
+    g.setColour (cardText());
     g.setFont (ui::font (13.0f, true));
     g.drawText (v.name, in.removeFromTop (18.0f).toNearestInt(), Justification::centredLeft, true);
-    g.setColour (ui::dim);
+    g.setColour (cardDim());
     g.setFont (ui::font (11.5f));
     g.drawText ("x " + String (v.pos.x, 1) + "   y " + String (v.pos.y, 1) + "   z " + String (v.pos.z, 1)
                     + "   (" + String (v.pos.length(), 1) + " m)",
@@ -694,15 +1104,15 @@ void MasterPage::paint (Graphics& g)
 
     const float sum = jmax (1.0e-6f, v.low * 0.7f + v.mid * 1.8f + v.high * 5.0f);
     const float shares[3] { v.low * 0.7f / sum, v.mid * 1.8f / sum, v.high * 5.0f / sum };
-    const Colour cols[3] { ui::pink, ui::amber, ui::cyan };
+    const Colour cols[3] { pn::pink, pn::amber, pn::cyan };
     const char* names[3] { "LOW", "MID", "HIGH" };
     for (int i = 0; i < 3; ++i)
     {
         auto line = in.removeFromTop (10.0f);
-        g.setColour (ui::dim);
+        g.setColour (cardDim());
         g.setFont (ui::font (9.5f, true));
         g.drawText (names[i], line.removeFromLeft (30.0f).toNearestInt(), Justification::centredLeft);
-        g.setColour (ui::panel);
+        g.setColour (cardBar());
         g.fillRoundedRectangle (line, 3.0f);
         g.setColour (cols[i]);
         g.fillRoundedRectangle (line.withWidth (jmax (2.0f, line.getWidth() * shares[i])), 3.0f);
@@ -733,7 +1143,7 @@ struct LabeledCombo final : Component
     void refresh() { box.setSelectedId (*value + 1, dontSendNotification); }
     void paint (Graphics& g) override
     {
-        g.setColour (ui::dim);
+        g.setColour (pn::dim);
         g.setFont (ui::font (10.5f, true));
         g.drawText (title, getLocalBounds().removeFromTop (14), Justification::centredLeft);
     }
@@ -759,14 +1169,14 @@ struct LabeledSlider final : Component
     }
     void lookAndFeelChanged() override
     {
-        s.setColour (Slider::textBoxTextColourId, ui::text);
+        s.setColour (Slider::textBoxTextColourId, pn::text);
         s.setColour (Slider::textBoxOutlineColourId, Colours::transparentBlack);
         s.setColour (Slider::textBoxBackgroundColourId, Colours::transparentBlack);
     }
     void refresh() { s.setValue (*value, dontSendNotification); }
     void paint (Graphics& g) override
     {
-        g.setColour (ui::dim);
+        g.setColour (pn::dim);
         g.setFont (ui::font (10.5f, true));
         g.drawText (title, getLocalBounds().removeFromTop (14), Justification::centredLeft);
     }
@@ -788,46 +1198,83 @@ struct LabeledToggle final : Component
     ToggleButton b; bool* value;
 };
 
-struct ThemeGrid final : Component
+struct DesignGrid final : Component
 {
-    explicit ThemeGrid (std::function<void()> cb) : onChange (std::move (cb)) {}
+    static constexpr int cols = 2, gap = 8, ch = 66;
+    explicit DesignGrid (std::function<void()> cb) : onChange (std::move (cb)) {}
 
+    Rectangle<int> cell (int i) const
+    {
+        const int cw = (getWidth() - gap * (cols - 1)) / cols;
+        return { (i % cols) * (cw + gap), (i / cols) * (ch + gap), cw, ch };
+    }
     int cellAt (Point<int> p) const
     {
-        const int cols = 3, gap = 8;
-        const int cw = (getWidth() - gap * (cols - 1)) / cols, ch = 44;
-        for (int i = 0; i < (int) ui::themes().size(); ++i)
-        {
-            Rectangle<int> r ((i % cols) * (cw + gap), (i / cols) * (ch + gap), cw, ch);
-            if (r.contains (p)) return i;
-        }
+        for (int i = 0; i < (int) ui::NumDesigns; ++i) if (cell (i).contains (p)) return i;
         return -1;
     }
-    static int heightFor() { return 4 * 44 + 3 * 8; }
+    static int heightFor() { return 3 * ch + 2 * gap; }
 
     void paint (Graphics& g) override
     {
-        const int cols = 3, gap = 8;
-        const int cw = (getWidth() - gap * (cols - 1)) / cols, ch = 44;
-        const int cur = Look::get().theme;
-        for (int i = 0; i < (int) ui::themes().size(); ++i)
+        const int cur = Look::get().design;
+        for (int i = 0; i < (int) ui::NumDesigns; ++i)
         {
-            const auto& t = ui::themes()[(size_t) i];
-            Rectangle<float> r ((float) ((i % cols) * (cw + gap)), (float) ((i / cols) * (ch + gap)), (float) cw, (float) ch);
-            g.setGradientFill (ColourGradient::vertical (Colour (t.bg1), r.getY(), Colour (t.bg0), r.getBottom()));
-            g.fillRoundedRectangle (r, 8.0f);
-            g.setColour (i == cur ? ui::cyan : (i == hover ? ui::dim : ui::border));
-            g.drawRoundedRectangle (r.reduced (0.5f), 8.0f, i == cur ? 2.0f : 1.0f);
-            g.setColour (Colour (t.text));
-            g.setFont (ui::font (11.0f, true));
-            g.drawText (String (t.name).replace (" (light)", ""), r.reduced (8.0f, 4.0f).removeFromTop (16.0f).toNearestInt(),
-                        Justification::centredLeft, true);
-            const juce::uint32 dots[4] { t.a1, t.a2, t.a3, t.a4 };
-            for (int k = 0; k < 4; ++k)
+            const auto& d = ui::designs()[(size_t) i];
+            const auto r = cell (i).toFloat();
+            const Colour bg0 (d.scene.bg0), bg1 (d.scene.bg1), txt (d.scene.text), dim (d.scene.dim);
+            const Colour a1 (d.scene.a1), a3 (d.scene.a3), brd (d.scene.border);
+            Graphics::ScopedSaveState ss (g);
+            Path clip; clip.addRoundedRectangle (r, i == 0 ? 8.0f : (i == 1 ? 3.0f : 0.0f));
+            g.reduceClipRegion (clip);
+            g.setGradientFill (ColourGradient::vertical (bg1, r.getY(), bg0, r.getBottom()));
+            g.fillRect (r);
+
+            // a tiny motif in the design's own drawing style
+            const Point<float> m (r.getRight() - 30.0f, r.getCentreY());
+            switch (i)
             {
-                g.setColour (Colour (dots[k]));
-                g.fillEllipse (r.getX() + 9.0f + (float) k * 14.0f, r.getBottom() - 16.0f, 9.0f, 9.0f);
+            case ui::Classic:
+                g.setColour (a1.withAlpha (0.25f)); g.fillEllipse (m.x - 15, m.y - 15, 30, 30);
+                g.setColour (a1); g.fillEllipse (m.x - 6, m.y - 6, 12, 12); break;
+            case ui::Vintage:
+                g.setColour (Colour (0xffb8a46a)); g.fillEllipse (m.x - 15, m.y - 15, 30, 30);
+                g.setColour (Colour (0xff2a1d10)); g.fillEllipse (m.x - 12, m.y - 12, 24, 24);
+                g.setColour (a1); g.fillEllipse (m.x - 6, m.y - 6, 12, 12); break;
+            case ui::Blueprint:
+                g.setColour (txt); g.drawEllipse (m.x - 14, m.y - 14, 28, 28, 1.0f);
+                g.drawLine (m.x - 18, m.y, m.x + 18, m.y, 1.0f); g.drawLine (m.x, m.y - 18, m.x, m.y + 18, 1.0f); break;
+            case ui::Studio:
+                g.setColour (a1); g.fillEllipse (m.x - 5, m.y - 5, 10, 10);
+                g.setColour (brd); g.drawEllipse (m.x - 14, m.y - 14, 28, 28, 1.0f); break;
+            case ui::Swiss:
+                g.setColour (txt); g.fillRect (m.x - 14, m.y - 14, 28.0f, 28.0f);
+                g.setColour (a1); g.fillEllipse (m.x - 7, m.y - 7, 14, 14); break;
+            default:
+                g.setColour (brd); g.drawEllipse (m.x - 15, m.y - 15, 30, 30, 1.0f); g.drawEllipse (m.x - 7, m.y - 7, 14, 14, 1.0f);
+                g.setColour (a1); g.fillEllipse (m.x + 4, m.y - 8, 4, 4); break;
             }
+
+            auto fnt = [&] (float h, bool bold)
+            {
+                const char* fam = d.sans;
+                const int st = bold ? Font::bold : Font::plain;
+                return fam[0] ? Font (FontOptions (String (fam), h, st)) : Font (FontOptions (h, st));
+            };
+            auto tr = r.reduced (9.0f, 7.0f);
+            g.setColour (txt);
+            g.setFont (fnt (12.5f, true));
+            g.drawText (d.name, tr.removeFromTop (17.0f).withTrimmedRight (50.0f).toNearestInt(), Justification::centredLeft, true);
+            g.setColour (dim);
+            g.setFont (fnt (9.5f, false));
+            g.drawFittedText (d.blurb, tr.withTrimmedRight (56.0f).toNearestInt(), Justification::topLeft, 3, 0.9f);
+        }
+        for (int i = 0; i < (int) ui::NumDesigns; ++i)
+        {
+            const auto r = cell (i).toFloat();
+            const float cr = i == 0 ? 8.0f : (i == 1 ? 3.0f : 0.0f);
+            g.setColour (i == cur ? pn::cyan : (i == hover ? pn::dim : pn::border));
+            g.drawRoundedRectangle (r.reduced (1.0f), cr, i == cur ? 2.5f : 1.0f);
         }
     }
     void mouseMove (const MouseEvent& e) override { const int h = cellAt (e.getPosition()); if (h != hover) { hover = h; repaint(); } }
@@ -835,13 +1282,12 @@ struct ThemeGrid final : Component
     void mouseDown (const MouseEvent& e) override
     {
         const int i = cellAt (e.getPosition());
-        if (i >= 0)
+        if (i >= 0 && i != Look::get().design)
         {
-            Look::get().theme = i;
-            ui::applyTheme (i);
+            Look::get().applyDesignDefaults (i);
+            ui::applyDesign (i);
             Look::themeChanged();
             onChange();
-            repaint();
         }
     }
     int hover = -1;
@@ -891,22 +1337,22 @@ LookPage::LookPage (std::function<void()> onThemeChanged) : impl (new Impl)
         addC (c);
     };
 
-    section ("THEME");
+    section ("DESIGN");
     {
-        auto* tg = I.add (std::make_unique<ThemeGrid> (onThemeChanged), ThemeGrid::heightFor() + 6);
+        auto* tg = I.add (std::make_unique<DesignGrid> (onThemeChanged), DesignGrid::heightFor() + 6);
         addC (tg);
     }
 
     section ("ORBS");
-    combo ("Orb style", { "Glow", "Sphere", "Ring", "Pulse" }, &L.orbStyle);
-    combo ("Orb colour", { "Spectrum (bass / mid / high)", "Track colour", "Theme accents" }, &L.colourMode);
+    combo ("Orb style", { "Glow", "Sphere", "Ring", "Pulse", "Lamp", "Target", "Flat", "Blip" }, &L.orbStyle);
+    combo ("Orb colour", { "Spectrum (bass / mid / high)", "Track colour", "Design accents" }, &L.colourMode);
     slider ("Orb size", &L.orbSize, 0.5, 2.0, 0.01, 0);
     slider ("Glow", &L.glow, 0.0, 2.0, 0.01, 3);
     slider ("Trail length", &L.trailLen, 0.0, 2.0, 0.01, 1);
     slider ("Label size", &L.labelSize, 0.8, 1.8, 0.01, 2);
 
     section ("ROOM");
-    combo ("Background", { "Gradient", "Solid", "Stars", "Nebula" }, &L.background);
+    combo ("Background (Classic)", { "Gradient", "Solid", "Stars", "Nebula" }, &L.background);
     combo ("Floor", { "Grid", "Dots", "Polar", "None" }, &L.floorStyle);
     slider ("Grid brightness", &L.gridBrightness, 0.0, 2.5, 0.01, 0);
     slider ("Perspective", &L.perspective, 0.6, 1.8, 0.01, 1);
@@ -929,8 +1375,13 @@ LookPage::LookPage (std::function<void()> onThemeChanged) : impl (new Impl)
 
     I.resetBtn.onClick = [this, onThemeChanged]
     {
-        Look::get() = LookSettings();
-        ui::applyTheme (0);
+        {
+            auto& cur = Look::get();
+            const int dsg = cur.design;
+            cur = LookSettings();
+            cur.applyDesignDefaults (dsg);
+            ui::applyDesign (dsg);
+        }
         Look::themeChanged();
         for (auto& r : impl->refreshers) r();
         onThemeChanged();
@@ -1069,27 +1520,142 @@ void ControlPanel::resized()
 
 void ControlPanel::paint (Graphics& g)
 {
-    g.fillAll (ui::panel);
-    g.setColour (ui::border);
-    g.drawVerticalLine (0, 0.0f, (float) getHeight());
+    auto b = getLocalBounds().toFloat();
+    const String sub = master ? "Spatial mix analyser" : "Binaural 3D positioner";
+    g.fillAll (pn::panel);
 
-    const float cx = 36.0f, cy = 38.0f;
-    ColourGradient glow (ui::cyan.withAlpha (0.5f), cx, cy, Colours::transparentBlack, cx + 26.0f, cy, true);
-    g.setGradientFill (glow);
-    g.fillEllipse (cx - 26.0f, cy - 26.0f, 52.0f, 52.0f);
-    g.setGradientFill (ColourGradient (ui::cyan.brighter (0.6f), cx - 4.0f, cy - 5.0f, ui::violet.darker (0.4f), cx + 9.0f, cy + 9.0f, true));
-    g.fillEllipse (cx - 9.0f, cy - 9.0f, 18.0f, 18.0f);
-    g.setColour (ui::violet.withAlpha (0.7f));
-    g.drawEllipse (cx - 17.0f, cy - 6.0f, 34.0f, 12.0f, 1.2f);
-
-    g.setFont (ui::font (24.0f, true));
-    g.setColour (ui::text);
-    g.drawText ("ORBIT", Rectangle<int> (66, 16, 100, 28), Justification::centredLeft);
-    g.setColour (ui::cyan);
-    g.drawText ("3D", Rectangle<int> (140, 16, 50, 28), Justification::centredLeft);
-    g.setFont (ui::font (11.0f));
-    g.setColour (ui::dim);
-    g.drawText (master ? "Spatial mix analyser" : "Binaural 3D positioner", Rectangle<int> (67, 41, 200, 14), Justification::centredLeft);
+    switch (ui::design)
+    {
+    case ui::Vintage:
+    {
+        g.setGradientFill (ColourGradient::vertical (pn::bg1, 0.0f, pn::bg0, b.getBottom()));
+        g.fillAll();
+        // fine brushed grain
+        Random rnd (7);
+        for (int i = 0; i < 260; ++i)
+        {
+            g.setColour ((rnd.nextBool() ? Colours::white : Colours::black).withAlpha (0.035f));
+            const float yy = rnd.nextFloat() * b.getHeight();
+            g.drawHorizontalLine ((int) yy, rnd.nextFloat() * b.getWidth() * 0.5f, b.getWidth());
+        }
+        // walnut cheek on the right edge
+        const auto wood = b.removeFromRight (12.0f);
+        g.setGradientFill (ColourGradient (Colour (0xff4a2c17), wood.getX(), 0.0f, Colour (0xff2a170a), wood.getRight(), 0.0f, false));
+        g.fillRect (wood);
+        for (int i = 0; i < 40; ++i)
+        {
+            g.setColour (Colour (0xff1a0e06).withAlpha (0.35f));
+            const float yy = (float) i * b.getHeight() / 40.0f;
+            g.drawLine (wood.getX(), yy, wood.getRight(), yy + 14.0f, 0.8f);
+        }
+        g.setColour (Colour (0xff8c7f5e)); g.drawVerticalLine (0, 0.0f, getHeight() * 1.0f);
+        // brass nameplate
+        Rectangle<float> plate (14.0f, 12.0f, b.getWidth() - 28.0f, 44.0f);
+        g.setGradientFill (ColourGradient (Colour (0xffd9c67f), plate.getX(), plate.getY(), Colour (0xff9c8845), plate.getRight(), plate.getBottom(), false));
+        g.fillRoundedRectangle (plate, 3.0f);
+        g.setColour (Colour (0xff5b4a1c)); g.drawRoundedRectangle (plate, 3.0f, 1.2f);
+        for (auto p : { plate.getTopLeft() + Point<float> (6, 6), plate.getTopRight() + Point<float> (-6, 6),
+                        plate.getBottomLeft() + Point<float> (6, -6), plate.getBottomRight() + Point<float> (-6, -6) })
+        {
+            g.setColour (Colour (0xff5b4a1c)); g.fillEllipse (p.x - 2.5f, p.y - 2.5f, 5.0f, 5.0f);
+            g.setColour (Colour (0xffe9d99a)); g.drawLine (p.x - 1.6f, p.y + 1.0f, p.x + 1.6f, p.y - 1.0f, 0.8f);
+        }
+        g.setColour (Colour (0xff2a1f0a));
+        g.setFont (Font (FontOptions (String ("Georgia"), 24.0f, Font::bold | Font::italic)));
+        g.drawText ("Orbit 3D", plate.withTrimmedBottom (14.0f).toNearestInt(), Justification::centred);
+        g.setFont (ui::font (9.5f));
+        g.drawText (sub.toUpperCase() + "  " + String::fromUTF8 ("\xc2\xb7") + "  MODEL O3", plate.withTrimmedTop (30.0f).toNearestInt(), Justification::centred);
+        break;
+    }
+    case ui::Blueprint:
+    {
+        g.fillAll (pn::bg0);
+        g.setColour (pn::border.withAlpha (0.28f));
+        for (float x = 0; x < b.getWidth(); x += 16.0f) g.drawVerticalLine ((int) x, 0.0f, b.getHeight());
+        for (float y = 0; y < b.getHeight(); y += 16.0f) g.drawHorizontalLine ((int) y, 0.0f, b.getWidth());
+        g.setColour (pn::text); g.drawVerticalLine (0, 0.0f, b.getHeight());
+        Rectangle<float> tb (12.0f, 10.0f, b.getWidth() - 24.0f, 46.0f);
+        g.setColour (pn::bg0); g.fillRect (tb);
+        g.setColour (pn::text); g.drawRect (tb, 1.2f);
+        g.drawVerticalLine ((int) (tb.getRight() - 78.0f), tb.getY(), tb.getBottom());
+        g.setFont (ui::font (20.0f, true));
+        g.drawText ("ORBIT 3D", tb.withTrimmedRight (80.0f).withTrimmedBottom (14.0f).reduced (8.0f, 0.0f).toNearestInt(), Justification::centredLeft);
+        g.setFont (ui::font (9.5f)); g.setColour (pn::dim);
+        g.drawText (sub.toUpperCase(), tb.withTrimmedRight (80.0f).withTrimmedTop (28.0f).reduced (8.0f, 0.0f).toNearestInt(), Justification::centredLeft);
+        g.setColour (pn::text);
+        g.drawText ("DWG 3D-001", tb.removeFromRight (78.0f).withTrimmedBottom (23.0f).toNearestInt(), Justification::centred);
+        g.drawText ("REV  A", tb.removeFromRight (78.0f).withTrimmedTop (23.0f).toNearestInt(), Justification::centred);
+        break;
+    }
+    case ui::Studio:
+    {
+        g.fillAll (pn::bg0);
+        g.setColour (pn::border); g.drawVerticalLine (0, 0.0f, b.getHeight());
+        g.drawHorizontalLine (58, 14.0f, b.getWidth() - 14.0f);
+        g.setColour (pn::cyan);
+        g.drawEllipse (16.0f, 20.0f, 20.0f, 20.0f, 1.6f);
+        g.fillEllipse (30.0f, 21.0f, 5.0f, 5.0f);
+        g.setColour (pn::text);
+        g.setFont (ui::font (19.0f));
+        g.drawText ("Orbit 3D", Rectangle<int> (46, 14, 160, 24), Justification::centredLeft);
+        g.setFont (ui::font (10.5f)); g.setColour (pn::dim);
+        g.drawText (sub, Rectangle<int> (47, 37, 220, 14), Justification::centredLeft);
+        break;
+    }
+    case ui::Swiss:
+    {
+        g.fillAll (pn::bg0);
+        g.setColour (pn::border);
+        g.fillRect (0.0f, 0.0f, 3.0f, b.getHeight());
+        g.fillRect (16.0f, 58.0f, b.getWidth() - 32.0f, 3.0f);
+        g.setColour (pn::pink); g.fillRect (16.0f, 14.0f, 14.0f, 14.0f);
+        g.setColour (pn::text);
+        g.setFont (ui::font (28.0f, true));
+        g.drawText ("Orbit 3D", Rectangle<int> (38, 8, 240, 32), Justification::centredLeft);
+        g.setFont (ui::font (11.0f, true));
+        g.drawText (sub, Rectangle<int> (16, 38, 280, 16), Justification::centredLeft);
+        break;
+    }
+    case ui::Radar:
+    {
+        g.fillAll (pn::bg0);
+        g.setColour (pn::border); g.drawVerticalLine (0, 0.0f, b.getHeight());
+        g.setColour (pn::border.withAlpha (0.35f));
+        for (float y = 0; y < b.getHeight(); y += 4.0f) g.drawHorizontalLine ((int) y, 1.0f, b.getWidth());
+        const Point<float> c (36.0f, 36.0f);
+        g.setColour (pn::cyan.withAlpha (0.6f));
+        g.drawEllipse (c.x - 18, c.y - 18, 36, 36, 1.2f); g.drawEllipse (c.x - 9, c.y - 9, 18, 18, 1.0f);
+        g.drawLine (c.x - 20, c.y, c.x + 20, c.y, 0.8f); g.drawLine (c.x, c.y - 20, c.x, c.y + 20, 0.8f);
+        g.setColour (pn::cyan); g.fillEllipse (c.x + 6, c.y - 10, 4, 4);
+        g.setFont (ui::mono (19.0f, true));
+        g.drawText ("ORBIT-3D", Rectangle<int> (64, 14, 200, 24), Justification::centredLeft);
+        g.setFont (ui::mono (10.0f)); g.setColour (pn::dim);
+        g.drawText ("// " + sub.toUpperCase(), Rectangle<int> (65, 39, 240, 14), Justification::centredLeft);
+        break;
+    }
+    default:
+    {
+        g.setColour (pn::border);
+        g.drawVerticalLine (0, 0.0f, (float) getHeight());
+        const float cx = 36.0f, cy = 38.0f;
+        ColourGradient glow (pn::cyan.withAlpha (0.5f), cx, cy, Colours::transparentBlack, cx + 26.0f, cy, true);
+        g.setGradientFill (glow);
+        g.fillEllipse (cx - 26.0f, cy - 26.0f, 52.0f, 52.0f);
+        g.setGradientFill (ColourGradient (pn::cyan.brighter (0.6f), cx - 4.0f, cy - 5.0f, pn::violet.darker (0.4f), cx + 9.0f, cy + 9.0f, true));
+        g.fillEllipse (cx - 9.0f, cy - 9.0f, 18.0f, 18.0f);
+        g.setColour (pn::violet.withAlpha (0.7f));
+        g.drawEllipse (cx - 17.0f, cy - 6.0f, 34.0f, 12.0f, 1.2f);
+        g.setFont (ui::font (24.0f, true));
+        g.setColour (pn::text);
+        g.drawText ("ORBIT", Rectangle<int> (66, 16, 100, 28), Justification::centredLeft);
+        g.setColour (pn::cyan);
+        g.drawText ("3D", Rectangle<int> (140, 16, 50, 28), Justification::centredLeft);
+        g.setFont (ui::font (11.0f));
+        g.setColour (pn::dim);
+        g.drawText (sub, Rectangle<int> (67, 41, 200, 14), Justification::centredLeft);
+        break;
+    }
+    }
 }
 
 //==============================================================================
@@ -1127,14 +1693,14 @@ void Orbit3DEditor::timerCallback()
     if (lastVersion != Look::themeVersion())
     {
         lastVersion = Look::themeVersion();
-        ui::applyTheme (Look::get().theme);
+        ui::applyDesign (Look::get().design);
         themeChanged();
     }
     if (! Desktop::getInstance().getMainMouseSource().isDragging())
         Look::flush();
 }
 
-void Orbit3DEditor::paint (Graphics& g) { g.fillAll (ui::bg0); }
+void Orbit3DEditor::paint (Graphics& g) { g.fillAll (pn::bg0); }
 
 void Orbit3DEditor::resized()
 {

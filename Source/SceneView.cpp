@@ -47,10 +47,76 @@ Colour spectrumColourFor (const SlotView& v)
                                   a * lo.getFloatBlue()  + b * mi.getFloatBlue()  + c * hi.getFloatBlue(), 1.0f);
 }
 
+Colour lineBase()
+{
+    switch (ui::design) { case ui::Studio: return ui::dim; case ui::Swiss: return ui::text; default: return ui::cyan; }
+}
+
+float lineMul()
+{
+    switch (ui::design) { case ui::Vintage: return 1.5f; case ui::Blueprint: return 2.8f; case ui::Studio: return 1.6f;
+                          case ui::Swiss: return 1.5f; case ui::Radar: return 1.7f; default: return 1.0f; }
+}
+
 Colour lineCol (float alpha)
 {
-    const float a = alpha * Look::get().gridBrightness * (ui::light ? 2.2f : 1.0f);
-    return ui::cyan.withAlpha (jlimit (0.0f, 1.0f, a));
+    const float a = alpha * Look::get().gridBrightness * lineMul();
+    return lineBase().withAlpha (jlimit (0.0f, 1.0f, a));
+}
+
+Colour ringCol()
+{
+    return ui::design == ui::Classic ? ui::violet : lineBase();
+}
+
+// Small panels (preset buttons, HUD) are drawn as a different kind of object per design.
+struct Plate { Colour text; };
+
+Plate drawPlate (Graphics& g, Rectangle<float> r, bool hover, bool pillShape)
+{
+    switch (ui::design)
+    {
+    case ui::Vintage:
+        g.setGradientFill (ColourGradient (Colour (hover ? 0xffe8d690 : 0xffd9c67f), r.getX(), r.getY(),
+                                           Colour (hover ? 0xffb09c58 : 0xff9c8845), r.getRight(), r.getBottom(), false));
+        g.fillRoundedRectangle (r, 3.0f);
+        g.setColour (Colour (0xff5b4a1c)); g.drawRoundedRectangle (r.reduced (0.5f), 3.0f, 1.2f);
+        g.setColour (Colour (0x55ffffff)); g.drawLine (r.getX() + 3, r.getY() + 1.5f, r.getRight() - 3, r.getY() + 1.5f, 1.0f);
+        return { Colour (0xff2a1f0a) };
+    case ui::Blueprint:
+        g.setColour (ui::bg0.withAlpha (0.9f)); g.fillRect (r);
+        g.setColour (hover ? ui::cyan : ui::text); g.drawRect (r.reduced (0.5f), 1.0f);
+        return { ui::text };
+    case ui::Studio:
+        g.setColour (ui::panel.withAlpha (hover ? 1.0f : 0.88f)); g.fillRoundedRectangle (r, 4.0f);
+        g.setColour (hover ? ui::cyan : ui::border); g.drawRoundedRectangle (r.reduced (0.5f), 4.0f, 1.0f);
+        return { ui::text };
+    case ui::Swiss:
+        g.setColour (hover ? ui::text : ui::panel); g.fillRect (r);
+        g.setColour (ui::text); g.drawRect (r.reduced (0.8f), 1.6f);
+        return { hover ? ui::panel : ui::text };
+    case ui::Radar:
+    {
+        g.setColour (ui::bg0.withAlpha (0.85f)); g.fillRect (r);
+        g.setColour (hover ? ui::text : ui::cyan);
+        const float len = 5.0f;
+        for (int sx = 0; sx < 2; ++sx)
+            for (int sy = 0; sy < 2; ++sy)
+            {
+                const float x = sx ? r.getRight() : r.getX(), y = sy ? r.getBottom() : r.getY();
+                g.drawLine (x, y, x + (sx ? -len : len), y, 1.3f);
+                g.drawLine (x, y, x, y + (sy ? -len : len), 1.3f);
+            }
+        return { hover ? ui::text : ui::cyan };
+    }
+    default:
+    {
+        const float cr = pillShape ? r.getHeight() * 0.5f : 12.0f;
+        g.setColour (ui::panel.withAlpha (hover ? 0.95f : 0.8f)); g.fillRoundedRectangle (r, cr);
+        g.setColour (hover ? ui::cyan : ui::border); g.drawRoundedRectangle (r.reduced (0.5f), cr, 1.0f);
+        return { hover ? ui::text : ui::text };
+    }
+    }
 }
 }
 
@@ -276,6 +342,48 @@ void SceneView::drawBackground (Graphics& g)
     const auto& L = Look::get();
     const auto b = getLocalBounds().toFloat();
 
+    switch (ui::design)
+    {
+    case ui::Vintage:
+    {
+        g.setGradientFill (ColourGradient (ui::bg1.brighter (0.15f), b.getCentreX(), b.getCentreY() * 0.9f,
+                                           ui::bg0.darker (0.5f), b.getRight(), b.getBottom(), true));
+        g.fillRect (b);
+        return;
+    }
+    case ui::Blueprint:
+    {
+        g.fillAll (ui::bg1);
+        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.07f), b.getCentreX(), b.getCentreY(),
+                                           Colours::transparentBlack, b.getRight(), b.getBottom(), true));
+        g.fillRect (b);
+        for (float x = 0; x < b.getWidth(); x += 20.0f)
+        {
+            g.setColour (ui::border.withAlpha (std::fmod (x, 100.0f) < 1.0f ? 0.34f : 0.14f));
+            g.drawVerticalLine ((int) x, 0.0f, b.getHeight());
+        }
+        for (float y = 0; y < b.getHeight(); y += 20.0f)
+        {
+            g.setColour (ui::border.withAlpha (std::fmod (y, 100.0f) < 1.0f ? 0.34f : 0.14f));
+            g.drawHorizontalLine ((int) y, 0.0f, b.getWidth());
+        }
+        return;
+    }
+    case ui::Studio:
+    case ui::Swiss:
+        g.fillAll (ui::bg0);
+        return;
+    case ui::Radar:
+    {
+        g.fillAll (ui::bg0);
+        g.setGradientFill (ColourGradient (ui::bg1.brighter (0.3f), b.getCentreX(), b.getCentreY(),
+                                           ui::bg0, b.getCentreX() + b.getWidth() * 0.6f, b.getCentreY(), true));
+        g.fillRect (b);
+        return;
+    }
+    default: break;
+    }
+
     if (L.background == 1)
     {
         g.fillAll (ui::bg0);
@@ -336,12 +444,57 @@ void SceneView::drawRoom (Graphics& g, const Camera& cam)
         {
             Path fp;
             fp.startNewSubPath (p[0]); fp.lineTo (p[1]); fp.lineTo (p[2]); fp.lineTo (p[3]); fp.closeSubPath();
-            g.setColour ((ui::light ? ui::panel : ui::bg1.interpolatedWith (ui::bg0, 0.35f)).withAlpha (0.75f));
-            g.fillPath (fp);
+            if (ui::design == ui::Classic || ui::design == ui::Vintage || ui::design == ui::Radar)
+            {
+                g.setColour ((ui::light ? ui::panel : ui::bg1.interpolatedWith (ui::bg0, 0.35f)).withAlpha (0.75f));
+                g.fillPath (fp);
+            }
+            else if (ui::design == ui::Blueprint)
+            {
+                g.setColour (Colours::white.withAlpha (0.045f));
+                g.fillPath (fp);
+            }
+        }
+    }
+
+    // radar sweep
+    if (ui::design == ui::Radar)
+    {
+        Point<float> pt; float s, d;
+        if (cam.project ({ 0, fy, 0 }, pt, s, d))
+        {
+            const float sw = sweepAngle();
+            for (int k = 0; k < 22; ++k)
+            {
+                Path wedge;
+                wedge.startNewSubPath (pt);
+                bool ok = true;
+                const float a0 = sw - (float) k * 0.045f, a1 = sw - (float) (k + 1) * 0.045f;
+                for (int j = 0; j <= 4; ++j)
+                {
+                    const float a = a0 + (a1 - a0) * (float) j / 4.0f;
+                    Point<float> q;
+                    ok = ok && cam.project ({ std::sin (a) * Z, fy, std::cos (a) * Z }, q, s, d);
+                    if (ok) wedge.lineTo (q);
+                }
+                if (ok)
+                {
+                    wedge.closeSubPath();
+                    g.setColour (ui::cyan.withAlpha (0.20f * (1.0f - (float) k / 22.0f) * L.gridBrightness));
+                    g.fillPath (wedge);
+                }
+            }
+            Point<float> q;
+            if (cam.project ({ std::sin (sw) * Z, fy, std::cos (sw) * Z }, q, s, d))
+            {
+                g.setColour (ui::cyan.withAlpha (0.8f));
+                g.drawLine (pt.x, pt.y, q.x, q.y, 1.6f);
+            }
         }
     }
 
     // facing wedge
+    if (ui::design == ui::Classic)
     {
         Path wedge; Point<float> pt; float s, d;
         if (cam.project ({ 0, fy, 0 }, pt, s, d))
@@ -406,7 +559,8 @@ void SceneView::drawRoom (Graphics& g, const Camera& cam)
             {
                 const float a = (float) i / 72.0f * MathConstants<float>::twoPi;
                 const V3 cur { std::sin (a) * (float) r, fy, std::cos (a) * (float) r };
-                line3 (g, cam, prev, cur, ui::violet.withAlpha (jlimit (0.0f, 1.0f, 0.15f * L.gridBrightness * (ui::light ? 2.0f : 1.0f))), 1.0f);
+                if (ui::design != ui::Blueprint || ((i / 2) % 2) == 0)
+                    line3 (g, cam, prev, cur, ringCol().withAlpha (jlimit (0.0f, 1.0f, (ui::design == ui::Classic ? 0.15f : 0.18f) * L.gridBrightness * lineMul())), 1.0f);
                 prev = cur;
             }
         }
@@ -427,23 +581,63 @@ void SceneView::drawRoom (Graphics& g, const Camera& cam)
 
     auto label = [&] (V3 p, const String& t, float size, float alpha)
     {
-        Point<float> q; float s, d;
-        if (cam.project (p, q, s, d))
+        Point<float> q; float sc, d;
+        if (cam.project (p, q, sc, d))
         {
-            g.setColour (ui::dim.withAlpha (alpha));
-            g.setFont (ui::font (size, true));
+            g.setColour ((ui::design == ui::Swiss ? ui::text : ui::dim).withAlpha (alpha));
+            g.setFont (ui::design == ui::Radar || ui::design == ui::Blueprint ? ui::mono (size, true)
+                                                                              : ui::font (size, ui::design == ui::Swiss));
             g.drawText (t, Rectangle<float> (q.x - 50, q.y - 8, 100, 16).toNearestInt(), Justification::centred);
         }
     };
-    label ({ 0, fy, Z + 1.1f }, "FRONT", 11.0f, 0.9f);
-    label ({ 0, fy, -Z - 1.1f }, "BACK", 11.0f, 0.9f);
-    label ({ -X - 1.1f, fy, 0 }, "LEFT", 11.0f, 0.9f);
-    label ({ X + 1.1f, fy, 0 }, "RIGHT", 11.0f, 0.9f);
+    const bool deg = ui::design == ui::Radar;
+    const bool bp = ui::design == ui::Blueprint;
+    const bool vin = ui::design == ui::Vintage;
+    const float ls = ui::design == ui::Swiss ? 13.0f : 11.0f;
+    label ({ 0, fy, Z + 1.1f }, deg ? "000" + kDeg : (bp ? "FRONT +Z" : (vin ? "Front" : "FRONT")), ls, 0.9f);
+    label ({ 0, fy, -Z - 1.1f }, deg ? "180" + kDeg : (bp ? "BACK -Z" : (vin ? "Back" : "BACK")), ls, 0.9f);
+    label ({ -X - 1.1f, fy, 0 }, deg ? "270" + kDeg : (bp ? "LEFT -X" : (vin ? "Left" : "LEFT")), ls, 0.9f);
+    label ({ X + 1.1f, fy, 0 }, deg ? "090" + kDeg : (bp ? "RIGHT +X" : (vin ? "Right" : "RIGHT")), ls, 0.9f);
     if (L.showRings)
         for (int r = 2; r <= 8; r += 2)
-            label ({ (float) r + 0.45f, fy, 0.35f }, String (r) + " m", 9.5f, 0.55f);
+            label ({ (float) r + 0.45f, fy, 0.35f }, String (r) + (deg ? "M" : " m"), 9.5f, 0.6f);
     if (L.showWalls)
-        label ({ -X, room::Y + 0.5f, -Z }, "UP", 9.5f, 0.45f);
+        label ({ -X, room::Y + 0.5f, -Z }, vin ? "Up" : "UP", 9.5f, 0.45f);
+
+    // radar bearing ticks around the scope
+    if (ui::design == ui::Radar)
+        for (int k = 0; k < 72; ++k)
+        {
+            const float a = (float) k / 72.0f * MathConstants<float>::twoPi;
+            const float len = (k % 6 == 0) ? 0.55f : 0.28f;
+            line3 (g, cam, { std::sin (a) * (Z + 0.1f), fy, std::cos (a) * (Z + 0.1f) },
+                   { std::sin (a) * (Z + 0.1f + len), fy, std::cos (a) * (Z + 0.1f + len) }, lineCol ((k % 6 == 0) ? 0.55f : 0.3f), 1.0f);
+        }
+
+    // blueprint dimension lines
+    if (bp)
+    {
+        const float off = Z + 2.6f;
+        auto dim = [&] (V3 a, V3 b, V3 tickDir, const String& t)
+        {
+            line3 (g, cam, a, b, ui::text.withAlpha (0.85f), 1.0f);
+            for (V3 e : { a, b })
+                line3 (g, cam, e - tickDir * 0.35f, e + tickDir * 0.35f, ui::text.withAlpha (0.85f), 1.2f);
+            Point<float> q; float sc, d;
+            if (cam.project ((a + b) * 0.5f, q, sc, d))
+            {
+                const float tw = textWidth (ui::mono (10.0f, true), t) + 10.0f;
+                g.setColour (ui::bg1);
+                g.fillRect (q.x - tw * 0.5f, q.y - 7.0f, tw, 14.0f);
+                g.setColour (ui::text);
+                g.setFont (ui::mono (10.0f, true));
+                g.drawText (t, Rectangle<float> (q.x - tw * 0.5f, q.y - 7.0f, tw, 14.0f).toNearestInt(), Justification::centred);
+            }
+        };
+        dim ({ -X, fy, -off }, { X, fy, -off }, { 0, 0, 1 }, String (X * 2.0f, 2) + " m");
+        dim ({ X + 2.6f, fy, -Z }, { X + 2.6f, fy, Z }, { 1, 0, 0 }, String (Z * 2.0f, 2) + " m");
+        dim ({ -X - 2.0f, fy, -Z }, { -X - 2.0f, room::Y, -Z }, { 1, 0, 0 }, String (room::Y * 2.0f, 2) + " m");
+    }
 }
 
 void SceneView::drawListener (Graphics& g, const Camera& cam)
@@ -454,10 +648,58 @@ void SceneView::drawListener (Graphics& g, const Camera& cam)
         return;
 
     const float r = s * (L.headStyle == 1 ? 0.28f : 0.55f);
-    const Colour headLight = ui::light ? Colours::white : Colour (0xfff2f6ff);
-    const Colour headDark  = ui::light ? ui::cyan.withMultipliedBrightness (0.8f) : Colour (0xff6b7cae);
+    Colour headLight = ui::light ? Colours::white : Colour (0xfff2f6ff);
+    Colour headDark  = ui::light ? ui::cyan.withMultipliedBrightness (0.8f) : Colour (0xff6b7cae);
+    if (ui::design == ui::Vintage) { headLight = Colour (0xfff0e2c0); headDark = Colour (0xff8a6a3a); }
 
-    ColourGradient halo ((ui::light ? ui::cyan : Colours::white).withAlpha (0.16f), c.x, c.y,
+    // Flat / technical designs draw the listener as a symbol rather than a lit 3D head.
+    if (ui::design >= ui::Blueprint)
+    {
+        const auto ink = ui::design == ui::Radar ? ui::cyan : ui::text;
+        auto nose = [&] (Colour col, bool fill)
+        {
+            Point<float> n0, n1, n2; float a, b, e2;
+            if (cam.project ({ 0, -0.05f, 0.78f }, n0, a, b) && cam.project ({ -0.14f, -0.05f, 0.42f }, n1, a, b)
+                && cam.project ({ 0.14f, -0.05f, 0.42f }, n2, a, e2))
+            {
+                Path p; p.startNewSubPath (n0); p.lineTo (n1); p.lineTo (n2); p.closeSubPath();
+                g.setColour (col);
+                if (fill) g.fillPath (p); else g.strokePath (p, PathStrokeType (1.4f));
+            }
+        };
+        if (ui::design == ui::Blueprint)
+        {
+            g.setColour (ui::bg1); g.fillEllipse (c.x - r, c.y - r, r * 2.0f, r * 2.0f);
+            g.setColour (ink); g.drawEllipse (c.x - r, c.y - r, r * 2.0f, r * 2.0f, 1.4f);
+            g.drawLine (c.x - r * 1.5f, c.y, c.x + r * 1.5f, c.y, 1.0f);
+            g.drawLine (c.x, c.y - r * 1.5f, c.x, c.y + r * 1.5f, 1.0f);
+            nose (ink, false);
+        }
+        else if (ui::design == ui::Studio)
+        {
+            g.setColour (ui::text.withAlpha (0.9f)); g.fillEllipse (c.x - r, c.y - r, r * 2.0f, r * 2.0f);
+            nose (ui::cyan, true);
+        }
+        else if (ui::design == ui::Swiss)
+        {
+            g.setColour (ui::text); g.fillEllipse (c.x - r, c.y - r, r * 2.0f, r * 2.0f);
+            nose (ui::pink, true);
+        }
+        else
+        {
+            g.setColour (ink.withAlpha (0.5f));
+            g.drawEllipse (c.x - r, c.y - r, r * 2.0f, r * 2.0f, 1.2f);
+            g.drawEllipse (c.x - r * 0.5f, c.y - r * 0.5f, r, r, 1.0f);
+            g.setColour (ink); g.fillEllipse (c.x - 2.5f, c.y - 2.5f, 5.0f, 5.0f);
+            nose (ink, true);
+        }
+        g.setColour (ui::design == ui::Swiss ? ui::text : ui::dim);
+        g.setFont (ui::design == ui::Radar || ui::design == ui::Blueprint ? ui::mono (9.5f, true) : ui::font (9.5f, true));
+        g.drawText (ui::design == ui::Radar ? "YOU / 0,0" : "YOU", Rectangle<float> (c.x - 40, c.y + r + 3.0f, 80, 12).toNearestInt(), Justification::centred);
+        return;
+    }
+
+    ColourGradient halo ((ui::light ? ui::cyan : (ui::design == ui::Vintage ? ui::cyan : Colours::white)).withAlpha (0.16f), c.x, c.y,
                          Colours::transparentBlack, c.x + r * 3.2f, c.y, true);
     g.setGradientFill (halo);
     g.fillEllipse (c.x - r * 3.2f, c.y - r * 3.2f, r * 6.4f, r * 6.4f);
@@ -609,6 +851,65 @@ void SceneView::drawOrb (Graphics& g, const Camera& cam, int slot)
             g.fillEllipse (cx - cr, cy - cr, cr * 2.0f, cr * 2.0f);
             break;
         }
+        case 4: // Lamp: brass-collared pilot bulb
+        {
+            glow (1.9f + 0.8f * v.lvl, 0.12f + 0.45f * v.lvl);
+            g.setColour (Colour (0xffb8a46a).withAlpha (alpha));
+            g.fillEllipse (cx - r * 1.12f, cy - r * 1.12f, r * 2.24f, r * 2.24f);
+            g.setColour (Colour (0xff1c120b).withAlpha (alpha));
+            g.fillEllipse (cx - r * 0.95f, cy - r * 0.95f, r * 1.9f, r * 1.9f);
+            const float k = 0.25f + 0.75f * jlimit (0.0f, 1.0f, v.lvl * 1.4f);
+            g.setGradientFill (ColourGradient (col.brighter (1.0f).withAlpha (alpha), cx - r * 0.2f, cy - r * 0.25f,
+                                               col.darker (0.5f + (1.0f - k)).withAlpha (alpha), cx + r * 0.8f, cy + r * 0.8f, true));
+            g.fillEllipse (cx - r * 0.78f, cy - r * 0.78f, r * 1.56f, r * 1.56f);
+            g.setColour (Colours::white.withAlpha (0.5f * alpha));
+            g.fillEllipse (cx - r * 0.5f, cy - r * 0.55f, r * 0.4f, r * 0.26f);
+            break;
+        }
+        case 5: // Target: technical crosshair marker
+        {
+            g.setColour (col.withAlpha (alpha));
+            g.drawEllipse (cx - r, cy - r, r * 2.0f, r * 2.0f, 1.4f);
+            const float ir = r * (0.18f + 0.5f * v.lvl);
+            g.drawEllipse (cx - ir, cy - ir, ir * 2.0f, ir * 2.0f, 1.0f);
+            g.fillEllipse (cx - 2.0f, cy - 2.0f, 4.0f, 4.0f);
+            g.drawLine (cx - r * 1.7f, cy, cx - r * 0.55f, cy, 1.2f);
+            g.drawLine (cx + r * 0.55f, cy, cx + r * 1.7f, cy, 1.2f);
+            g.drawLine (cx, cy - r * 1.7f, cx, cy - r * 0.55f, 1.2f);
+            g.drawLine (cx, cy + r * 0.55f, cx, cy + r * 1.7f, 1.2f);
+            break;
+        }
+        case 6: // Flat
+        {
+            g.setColour (col.withAlpha (0.28f * alpha));
+            const float rr = r * (1.2f + 0.7f * v.lvl);
+            g.drawEllipse (cx - rr, cy - rr, rr * 2.0f, rr * 2.0f, 1.2f);
+            g.setColour (col.withAlpha (alpha));
+            g.fillEllipse (cx - r * 0.9f, cy - r * 0.9f, r * 1.8f, r * 1.8f);
+            if (ui::design == ui::Swiss)
+            {
+                g.setColour (ui::text.withAlpha (alpha));
+                g.drawEllipse (cx - r * 0.9f, cy - r * 0.9f, r * 1.8f, r * 1.8f, 2.0f);
+            }
+            break;
+        }
+        case 7: // Blip: lights up when the radar sweep passes
+        {
+            const float az = std::atan2 (v.dispPos.x, v.dispPos.z);
+            float diff = std::fmod (sweepAngle() - az, MathConstants<float>::twoPi);
+            if (diff < 0) diff += MathConstants<float>::twoPi;
+            const float hit = std::exp (-diff * 1.6f);
+            const float b = 0.35f + 0.65f * hit;
+            glow (1.6f + 1.4f * hit, (0.10f + 0.45f * v.lvl) * b);
+            g.setColour (col.withAlpha (b * alpha));
+            Path dia;
+            const float br = r * 0.75f;
+            dia.addQuadrilateral (cx, cy - br, cx + br, cy, cx, cy + br, cx - br, cy);
+            g.fillPath (dia);
+            g.setColour (col.withAlpha (0.5f * alpha));
+            g.drawEllipse (cx - r * 1.3f, cy - r * 1.3f, r * 2.6f, r * 2.6f, 1.0f);
+            break;
+        }
         default: // Glow
         {
             glow (2.6f + 1.6f * v.lvl, 0.15f + 0.5f * v.lvl);
@@ -619,7 +920,7 @@ void SceneView::drawOrb (Graphics& g, const Camera& cam, int slot)
         }
     }
 
-    if (L.orbStyle != 2)
+    if (L.orbStyle <= 3 && L.orbStyle != 2)
     {
         g.setColour (v.trackColour.withAlpha (alpha));
         g.drawEllipse (cx - r, cy - r, r * 2.0f, r * 2.0f, self ? 2.2f : 1.6f);
@@ -633,24 +934,110 @@ void SceneView::drawOrb (Graphics& g, const Camera& cam, int slot)
 
     const bool wantLabel = L.showLabels ? (! ghost || hov) : (sel || hov || self);
     if (wantLabel)
+        drawLabel (g, v, cx, cy, r, self, sel, alpha);
+}
+
+void SceneView::drawLabel (Graphics& g, const SlotView& v, float cx, float cy, float r, bool self, bool sel, float alpha)
+{
+    const auto& L = Look::get();
+    const auto t = v.name.isEmpty() ? String ("Track") : v.name;
+    const float fs = 11.5f * L.labelSize;
+    switch (ui::design)
     {
-        const auto t = v.name.isEmpty() ? String ("Track") : v.name;
-        const Rectangle<int> tb ((int) cx - 90, (int) (cy + r + 5.0f), 180, (int) (16.0f * L.labelSize) + 2);
-        g.setFont (ui::font (11.5f * L.labelSize, self || sel));
-        g.setColour ((ui::light ? Colours::white : Colours::black).withAlpha (0.6f * alpha));
-        g.drawText (t, tb.translated (1, 1), Justification::centred, true);
-        g.setColour (ui::text.withAlpha (alpha));
-        g.drawText (t, tb, Justification::centred, true);
+    case ui::Vintage:   // paper tag on a string
+    {
+        const auto f = ui::font (fs, self || sel);
+        const float w = textWidth (f, t) + 16.0f, h = 17.0f * L.labelSize;
+        Rectangle<float> tag (cx - w * 0.5f, cy + r + 8.0f, w, h);
+        g.setColour (Colour (0xff6b5a3a).withAlpha (0.7f * alpha));
+        g.drawLine (cx, cy + r, cx, tag.getY(), 1.0f);
+        g.setColour (Colour (0xfff0e2c0).withAlpha (0.95f * alpha));
+        g.fillRoundedRectangle (tag, 2.0f);
+        g.setColour (Colour (0xffb8a46a).withAlpha (alpha));
+        g.drawRoundedRectangle (tag.reduced (0.5f), 2.0f, 1.0f);
+        g.setColour (Colour (0xff2a1f0a).withAlpha (alpha));
+        g.setFont (f);
+        g.drawText (t, tag.toNearestInt(), Justification::centred, true);
+        return;
     }
+    case ui::Blueprint: // callout with leader line
+    {
+        const auto f = ui::mono (fs - 1.0f, self || sel);
+        const float w = textWidth (f, t) + 10.0f;
+        const Point<float> a (cx + r * 0.75f, cy - r * 0.75f), b (cx + r + 16.0f, cy - r - 14.0f);
+        g.setColour (ui::text.withAlpha (0.9f * alpha));
+        g.drawLine (a.x, a.y, b.x, b.y, 1.0f);
+        g.drawLine (b.x, b.y, b.x + w, b.y, 1.0f);
+        g.setFont (f);
+        g.drawText (t, Rectangle<float> (b.x + 3.0f, b.y - 15.0f, w, 14.0f).toNearestInt(), Justification::centredLeft, true);
+        return;
+    }
+    case ui::Studio:
+        g.setFont (ui::font (fs - 0.5f, self || sel));
+        g.setColour (ui::text.withAlpha (0.9f * alpha));
+        g.drawText (t, Rectangle<float> (cx + r + 6.0f, cy - 9.0f, 160.0f, 18.0f).toNearestInt(), Justification::centredLeft, true);
+        return;
+    case ui::Swiss:
+    {
+        const auto f = ui::font (fs, true);
+        const float w = textWidth (f, t) + 14.0f, h = 17.0f * L.labelSize;
+        Rectangle<float> box (cx - w * 0.5f, cy + r + 6.0f, w, h);
+        g.setColour (ui::text.withAlpha (alpha));
+        g.fillRect (box);
+        g.setColour (ui::panel.withAlpha (alpha));
+        g.setFont (f);
+        g.drawText (t, box.toNearestInt(), Justification::centred, true);
+        return;
+    }
+    case ui::Radar:
+    {
+        g.setFont (ui::mono (fs - 1.0f, self || sel));
+        g.setColour (ui::text.withAlpha (alpha));
+        g.drawText ("[" + t.toUpperCase() + "]", Rectangle<float> (cx + r + 6.0f, cy - 9.0f, 200.0f, 18.0f).toNearestInt(), Justification::centredLeft, true);
+        return;
+    }
+    default: break;
+    }
+    const Rectangle<int> tb ((int) cx - 90, (int) (cy + r + 5.0f), 180, (int) (16.0f * L.labelSize) + 2);
+    g.setFont (ui::font (fs, self || sel));
+    g.setColour ((ui::light ? Colours::white : Colours::black).withAlpha (0.6f * alpha));
+    g.drawText (t, tb.translated (1, 1), Justification::centred, true);
+    g.setColour (ui::text.withAlpha (alpha));
+    g.drawText (t, tb, Justification::centred, true);
 }
 
 void SceneView::drawSpectrumOverlay (Graphics& g, Rectangle<float> r)
 {
     const auto& L = Look::get();
-    g.setColour (ui::panel.withAlpha (0.86f));
-    g.fillRoundedRectangle (r, 12.0f);
-    g.setColour (ui::border);
-    g.drawRoundedRectangle (r.reduced (0.5f), 12.0f, 1.0f);
+    switch (ui::design)
+    {
+    case ui::Vintage:
+        g.setColour (Colour (0xff0e0905).withAlpha (0.92f)); g.fillRoundedRectangle (r, 4.0f);
+        g.setColour (Colour (0xffb8a46a)); g.drawRoundedRectangle (r.reduced (1.0f), 4.0f, 2.0f);
+        break;
+    case ui::Blueprint:
+        g.setColour (ui::bg0.withAlpha (0.88f)); g.fillRect (r);
+        g.setColour (ui::text); g.drawRect (r.reduced (0.5f), 1.2f);
+        break;
+    case ui::Studio:
+        g.setColour (ui::panel.withAlpha (0.95f)); g.fillRoundedRectangle (r, 4.0f);
+        g.setColour (ui::border); g.drawRoundedRectangle (r.reduced (0.5f), 4.0f, 1.0f);
+        break;
+    case ui::Swiss:
+        g.setColour (ui::panel); g.fillRect (r);
+        g.setColour (ui::text); g.drawRect (r.reduced (1.0f), 2.0f);
+        break;
+    case ui::Radar:
+        g.setColour (ui::bg0.withAlpha (0.92f)); g.fillRect (r);
+        g.setColour (ui::border); g.drawRect (r.reduced (0.5f), 1.0f);
+        break;
+    default:
+        g.setColour (ui::panel.withAlpha (0.86f));
+        g.fillRoundedRectangle (r, 12.0f);
+        g.setColour (ui::border);
+        g.drawRoundedRectangle (r.reduced (0.5f), 12.0f, 1.0f);
+        break;
+    }
 
     auto plot = r.reduced (16.0f, 14.0f);
     auto meters = plot.removeFromRight (44.0f);
@@ -679,9 +1066,9 @@ void SceneView::drawSpectrumOverlay (Graphics& g, Rectangle<float> r)
         g.drawHorizontalLine ((int) y, plot.getX(), plot.getRight());
     }
 
-    g.setColour (ui::dim);
-    g.setFont (ui::font (10.0f, true));
-    g.drawText ("MASTER SPECTRUM", Rectangle<float> (plot.getX() + 2, plot.getY() - 4, 140, 14).toNearestInt(), Justification::left);
+    g.setColour (ui::design == ui::Swiss ? ui::text : ui::dim);
+    g.setFont (ui::design == ui::Radar || ui::design == ui::Blueprint ? ui::mono (10.0f, true) : ui::font (10.0f, ui::design == ui::Swiss));
+    g.drawText (ui::design == ui::Blueprint ? "FIG. 2 - MASTER SPECTRUM" : (ui::design == ui::Radar ? "> MASTER SPECTRUM" : (ui::design == ui::Vintage ? "Master spectrum" : "MASTER SPECTRUM")), Rectangle<float> (plot.getX() + 2, plot.getY() - 4, 200, 14).toNearestInt(), Justification::left);
 
     const float sr = proc.sampleRateAtomic.load();
     const float binHz = sr / (float) kFFT;
@@ -714,8 +1101,22 @@ void SceneView::drawSpectrumOverlay (Graphics& g, Rectangle<float> r)
             const float f1 = 20.0f * std::pow (1000.0f, (float) (i + 1) / (float) bars);
             const float y = yFor (dbAt (f0, f1));
             const float t = (float) i / (float) bars;
-            g.setColour (ui::pink.interpolatedWith (ui::cyan, t).withAlpha (0.9f));
-            g.fillRoundedRectangle (plot.getX() + (float) i * bw + 1.0f, y, bw - 2.0f, jmax (1.5f, plot.getBottom() - y), 2.0f);
+            const bool mono1 = ui::design == ui::Swiss || ui::design == ui::Studio || ui::design == ui::Radar || ui::design == ui::Blueprint;
+            const auto bc = mono1 ? ui::cyan : ui::pink.interpolatedWith (ui::cyan, t);
+            if (ui::design == ui::Radar)   // LED segments
+            {
+                for (float yy = plot.getBottom() - 3.0f; yy > y; yy -= 4.0f)
+                {
+                    g.setColour (bc.withAlpha (0.9f));
+                    g.fillRect (plot.getX() + (float) i * bw + 1.0f, yy, bw - 2.0f, 2.5f);
+                }
+            }
+            else
+            {
+                g.setColour (bc.withAlpha (0.9f));
+                const float cr = ui::design == ui::Classic ? 2.0f : (ui::design == ui::Vintage ? 1.0f : 0.0f);
+                g.fillRoundedRectangle (plot.getX() + (float) i * bw + 1.0f, y, bw - 2.0f, jmax (1.5f, plot.getBottom() - y), cr);
+            }
         }
     }
     else
@@ -735,11 +1136,29 @@ void SceneView::drawSpectrumOverlay (Graphics& g, Rectangle<float> r)
             Path fillP (p);
             fillP.lineTo (plot.getRight(), plot.getBottom());
             fillP.closeSubPath();
-            g.setGradientFill (ColourGradient (ui::cyan.withAlpha (0.50f), 0.0f, plot.getY(),
-                                               ui::violet.withAlpha (0.04f), 0.0f, plot.getBottom(), false));
-            g.fillPath (fillP);
+            if (ui::design == ui::Blueprint)
+            {
+                Graphics::ScopedSaveState ss (g);
+                g.reduceClipRegion (fillP.createPathWithRoundedCorners (0.0f).getBounds().toNearestInt());
+                g.setColour (ui::text.withAlpha (0.45f));
+                for (float hx = plot.getX() - plot.getHeight(); hx < plot.getRight(); hx += 6.0f)
+                {
+                    Path hl; hl.startNewSubPath (hx, plot.getBottom()); hl.lineTo (hx + plot.getHeight(), plot.getY());
+                    Path clipped;
+                    g.saveState();
+                    g.reduceClipRegion (fillP);
+                    g.strokePath (hl, PathStrokeType (1.0f));
+                    g.restoreState();
+                }
+            }
+            else
+            {
+                g.setGradientFill (ColourGradient (ui::cyan.withAlpha (ui::design == ui::Swiss ? 0.25f : 0.50f), 0.0f, plot.getY(),
+                                                   (ui::design == ui::Classic ? ui::violet : ui::cyan).withAlpha (0.04f), 0.0f, plot.getBottom(), false));
+                g.fillPath (fillP);
+            }
         }
-        g.setColour (ui::cyan);
+        g.setColour (ui::design == ui::Blueprint ? ui::text : ui::cyan);
         g.strokePath (p, PathStrokeType (L.spectrumStyle == 1 ? 2.0f : 1.5f));
     }
 
@@ -779,12 +1198,9 @@ void SceneView::drawPresetButtons (Graphics& g)
     {
         const auto r = presetRects[(size_t) i];
         const bool h = i == hoverPreset;
-        g.setColour (ui::panel.withAlpha (h ? 0.95f : 0.8f));
-        g.fillRoundedRectangle (r, 13.0f);
-        g.setColour (h ? ui::cyan : ui::border);
-        g.drawRoundedRectangle (r.reduced (0.5f), 13.0f, 1.0f);
-        g.setColour (h ? ui::text : ui::dim);
-        g.setFont (ui::font (10.5f, true));
+        const auto pl = drawPlate (g, r, h, true);
+        g.setColour (ui::design == ui::Classic ? (h ? ui::text : ui::dim) : pl.text);
+        g.setFont (ui::design == ui::Radar || ui::design == ui::Blueprint ? ui::mono (10.5f, true) : ui::font (10.5f, true));
         g.drawText (names[i], r.toNearestInt(), Justification::centred);
     }
 }
@@ -825,18 +1241,20 @@ void SceneView::drawHud (Graphics& g)
         line2 = "Drag the orb to move" + kDot + "Shift-drag = height" + kDot + "Drag empty space to orbit" + kDot + "Wheel to zoom";
     }
 
-    const int w1 = jmax (60, (int) textWidth (ui::font (13.0f, true), line1) + 28);
+    const int w1 = jmax (60, (int) textWidth (ui::design == ui::Radar || ui::design == ui::Blueprint ? ui::mono (13.0f, true) : ui::font (13.0f, true), line1) + 28);
     Rectangle<float> pill (16.0f, 14.0f, (float) w1, 28.0f);
-    g.setColour (ui::panel.withAlpha (0.8f));
-    g.fillRoundedRectangle (pill, 14.0f);
-    g.setColour (ui::border);
-    g.drawRoundedRectangle (pill.reduced (0.5f), 14.0f, 1.0f);
-    g.setColour (ui::text);
-    g.setFont (ui::font (13.0f, true));
-    g.drawText (line1, pill.toNearestInt(), Justification::centred);
+    Colour hudText = ui::text;
+    if (ui::design == ui::Studio)
+        g.setColour (Colours::transparentBlack);   // Studio: bare text, no plate
+    else
+        hudText = drawPlate (g, pill, false, true).text;
+    g.setColour (hudText);
+    g.setFont (ui::design == ui::Radar || ui::design == ui::Blueprint ? ui::mono (13.0f, true) : ui::font (13.0f, true));
+    g.drawText (line1, ui::design == ui::Studio ? pill.withX (6.0f).toNearestInt() : pill.toNearestInt(),
+                ui::design == ui::Studio ? Justification::centredLeft : Justification::centred);
 
-    g.setFont (ui::font (11.0f));
-    g.setColour (ui::dim);
+    g.setFont (ui::design == ui::Radar || ui::design == ui::Blueprint ? ui::mono (10.5f) : ui::font (11.0f));
+    g.setColour (ui::design == ui::Swiss ? ui::text : ui::dim);
     g.drawText (line2, Rectangle<int> (18, 48, getWidth() - 36, 16), Justification::left);
 }
 
@@ -910,11 +1328,20 @@ void SceneView::paint (Graphics& g)
         if (L.floorStyle != 3 && cam.project ({ v.dispPos.x, -room::Y, v.dispPos.z }, fp, fs, fd))
         {
             const float wr = (0.35f + 0.35f * v.lvl) * fs * L.orbSize;
-            g.setColour (Colours::black.withAlpha ((ui::light ? 0.2f : 0.35f) * al));
-            g.fillEllipse (fp.x - wr, fp.y - wr * 0.38f, wr * 2.0f, wr * 0.76f);
-            g.setColour (col.withAlpha (0.18f * al));
-            g.fillEllipse (fp.x - wr * 0.7f, fp.y - wr * 0.27f, wr * 1.4f, wr * 0.54f);
-            g.setColour (ui::text.withAlpha (0.13f * al));
+            if (ui::design == ui::Classic || ui::design == ui::Vintage)
+            {
+                g.setColour (Colours::black.withAlpha ((ui::light ? 0.2f : 0.35f) * al));
+                g.fillEllipse (fp.x - wr, fp.y - wr * 0.38f, wr * 2.0f, wr * 0.76f);
+                g.setColour (col.withAlpha (0.18f * al));
+                g.fillEllipse (fp.x - wr * 0.7f, fp.y - wr * 0.27f, wr * 1.4f, wr * 0.54f);
+            }
+            else
+            {
+                g.setColour (col.withAlpha (0.6f * al));
+                g.drawLine (fp.x - 4.0f, fp.y, fp.x + 4.0f, fp.y, 1.2f);
+                g.drawLine (fp.x, fp.y - 2.5f, fp.x, fp.y + 2.5f, 1.2f);
+            }
+            g.setColour ((ui::design == ui::Swiss ? ui::text : ui::text).withAlpha ((ui::design == ui::Classic ? 0.13f : 0.3f) * al));
             g.drawLine (v.sx, v.sy, fp.x, fp.y, 1.0f);
         }
 
@@ -944,6 +1371,74 @@ void SceneView::paint (Graphics& g)
         drawSpectrumOverlay (g, Rectangle<float> (14.0f, (float) getHeight() - 134.0f, (float) getWidth() - 28.0f, 120.0f));
 
     drawHud (g);
+    drawFrameOverlay (g);
+}
+
+void SceneView::drawFrameOverlay (Graphics& g)
+{
+    const auto b = getLocalBounds().toFloat();
+    switch (ui::design)
+    {
+    case ui::Vintage:   // walnut frame with a brass liner and screws
+    {
+        const float t = 9.0f;
+        g.setColour (Colour (0xff2a170a));
+        g.fillRect (b.getX(), b.getY(), b.getWidth(), t);
+        g.fillRect (b.getX(), b.getBottom() - t, b.getWidth(), t);
+        g.fillRect (b.getX(), b.getY(), t, b.getHeight());
+        g.fillRect (b.getRight() - t, b.getY(), t, b.getHeight());
+        g.setColour (Colour (0xffb8a46a));
+        g.drawRect (b.reduced (t), 1.8f);
+        g.setColour (Colour (0xff4a2c17));
+        for (float x = 0; x < b.getWidth(); x += 7.0f)
+        {
+            g.drawLine (x, 0.0f, x + 5.0f, t - 2.0f, 0.8f);
+            g.drawLine (x, b.getBottom(), x + 5.0f, b.getBottom() - t + 2.0f, 0.8f);
+        }
+        for (auto p : { Point<float> (t * 0.5f, t * 0.5f), Point<float> (b.getRight() - t * 0.5f, t * 0.5f),
+                        Point<float> (t * 0.5f, b.getBottom() - t * 0.5f), Point<float> (b.getRight() - t * 0.5f, b.getBottom() - t * 0.5f) })
+        {
+            g.setColour (Colour (0xffb8a46a)); g.fillEllipse (p.x - 3.0f, p.y - 3.0f, 6.0f, 6.0f);
+            g.setColour (Colour (0xff3a2a10)); g.drawLine (p.x - 2.0f, p.y + 1.0f, p.x + 2.0f, p.y - 1.0f, 1.0f);
+        }
+        break;
+    }
+    case ui::Blueprint:
+    {
+        g.setColour (ui::text.withAlpha (0.9f));
+        g.drawRect (b.reduced (8.0f), 1.0f);
+        g.drawRect (b.reduced (11.0f), 1.0f);
+        if (! isMaster())
+        {
+            Rectangle<float> tb (b.getRight() - 236.0f, b.getBottom() - 56.0f, 225.0f, 45.0f);
+            g.setColour (ui::bg1); g.fillRect (tb);
+            g.setColour (ui::text); g.drawRect (tb, 1.0f);
+            g.drawHorizontalLine ((int) (tb.getY() + 22.0f), tb.getX(), tb.getRight());
+            g.drawVerticalLine ((int) (tb.getX() + 120.0f), tb.getY() + 22.0f, tb.getBottom());
+            g.setFont (ui::mono (11.0f, true));
+            g.drawText ("LISTENER PLAN - BINAURAL", tb.withHeight (22.0f).toNearestInt(), Justification::centred);
+            g.setFont (ui::mono (9.5f));
+            g.drawText ("SCALE 1:1 m", tb.withTrimmedTop (22.0f).withWidth (120.0f).toNearestInt(), Justification::centred);
+            g.drawText ("SHEET 1/1", tb.withTrimmedTop (22.0f).withTrimmedLeft (120.0f).toNearestInt(), Justification::centred);
+        }
+        break;
+    }
+    case ui::Radar:
+    {
+        g.setColour (Colours::black.withAlpha (0.16f));
+        for (float y = 0; y < b.getHeight(); y += 3.0f) g.drawHorizontalLine ((int) y, 0.0f, b.getWidth());
+        ColourGradient vg (Colours::transparentBlack, b.getCentreX(), b.getCentreY(),
+                           Colours::black.withAlpha (0.55f), b.getCentreX() + b.getWidth() * 0.62f, b.getCentreY() + b.getHeight() * 0.7f, true);
+        g.setGradientFill (vg); g.fillRect (b);
+        g.setColour (ui::border); g.drawRect (b.reduced (5.0f), 1.0f);
+        break;
+    }
+    case ui::Swiss:
+        g.setColour (ui::text);
+        g.fillRect (b.getX(), b.getBottom() - 3.0f, b.getWidth(), 3.0f);
+        break;
+    default: break;
+    }
 }
 
 //==============================================================================
